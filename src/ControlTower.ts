@@ -483,6 +483,8 @@ async function parseTranscriptStream(filePath: string): Promise<SessionMeta> {
 
   const timestamps: number[] = [];
 
+  let firstUserMsg = "";
+
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
@@ -500,6 +502,29 @@ async function parseTranscriptStream(filePath: string): Promise<SessionMeta> {
       // Count messages
       if (entry.type === "human" || entry.type === "assistant" || entry.type === "user") {
         meta.messageCount++;
+      }
+
+      // Capture first substantive user message as fallback task description
+      if ((entry.type === "human" || entry.type === "user") && !firstUserMsg) {
+        const msg = entry.message;
+        let text = "";
+        if (msg && typeof msg === "object") {
+          const content = msg.content;
+          if (typeof content === "string") text = content;
+          else if (Array.isArray(content)) {
+            for (const b of content) {
+              if (b?.type === "text" && typeof b.text === "string") { text = b.text; break; }
+            }
+          }
+        }
+        // Strip XML tags, commands, and system reminders
+        const clean = text
+          .replace(/<[^>]+>/g, "")
+          .replace(/\/(PAI|commit|help|review|simplify)\b/g, "")
+          .trim();
+        if (clean.length > 15 && !clean.startsWith("system-reminder")) {
+          firstUserMsg = clean.slice(0, 200);
+        }
       }
 
       // Extract tool calls from assistant messages
@@ -526,33 +551,26 @@ async function parseTranscriptStream(filePath: string): Promise<SessionMeta> {
                 const skillName = block.input.skill || block.input.name || "unknown";
                 meta.skillInvocations.push({ name: skillName, at: ts || "" });
               }
-
-              // Detect skill invocations for task description
-              if (name === "TaskCreate" && block.input?.subject) {
-                const subj = block.input.subject;
-                if (subj.startsWith("ISC-") && !meta.taskDescription) {
-                  // Extract from ISC subject
-                }
-              }
             }
 
-            // Try to extract task description from text content
+            // Extract task description from Algorithm format
             if (block && block.type === "text" && typeof block.text === "string" && !meta.taskDescription) {
               const taskMatch = block.text.match(/🗒️\s*TASK:\s*(.+)/);
               if (taskMatch) meta.taskDescription = taskMatch[1].trim().slice(0, 200);
             }
-          }
-        }
-      }
 
-      // Extract effort level from text
-      if (entry.type === "assistant" && msg?.content) {
-        const content = msg.content;
-        if (Array.isArray(content)) {
-          for (const block of content) {
+            // Extract effort level (multiple patterns across Algorithm versions)
             if (block?.type === "text" && typeof block.text === "string" && !meta.effortLevel) {
-              const effortMatch = block.text.match(/Selected:\s*\*?\*?(\w+)\*?\*?\s*\(/);
-              if (effortMatch) meta.effortLevel = effortMatch[1];
+              const patterns = [
+                /Selected:\s*\*?\*?(\w+)\*?\*?\s*\(/,
+                /EFFORT LEVEL:\s*\*?\*?(\w+)\*?\*?/,
+                /💪🏼\s*EFFORT LEVEL:\s*\*?\*?(\w+)\*?\*?/i,
+                /Effort Level:\s*(\w+)/,
+              ];
+              for (const pat of patterns) {
+                const m = block.text.match(pat);
+                if (m) { meta.effortLevel = m[1]; break; }
+              }
             }
           }
         }
@@ -560,6 +578,11 @@ async function parseTranscriptStream(filePath: string): Promise<SessionMeta> {
     } catch {
       // Skip malformed lines
     }
+  }
+
+  // Fallback: use first user message if no Algorithm TASK line found
+  if (!meta.taskDescription && firstUserMsg) {
+    meta.taskDescription = firstUserMsg;
   }
 
   // Calculate active working time: sum gaps between consecutive timestamps,
@@ -579,7 +602,7 @@ async function parseTranscriptStream(filePath: string): Promise<SessionMeta> {
 
 // ─── Sync Engine ────────────────────────────────────────────────────────────
 
-async function syncTranscripts(db: Database): Promise<{ processed: number; skipped: number }> {
+async function syncTranscripts(db: Database, force = false): Promise<{ processed: number; skipped: number }> {
   let processed = 0;
   let skipped = 0;
 
@@ -618,11 +641,13 @@ async function syncTranscripts(db: Database): Promise<{ processed: number; skipp
       const stat = statSync(filePath);
       const mtime = stat.mtimeMs;
 
-      // Incremental: skip if mtime hasn't changed
-      const existing = getSession.get(sessionId) as { file_mtime: number } | null;
-      if (existing && Math.abs(existing.file_mtime - mtime) < 1000) {
-        skipped++;
-        continue;
+      // Incremental: skip if mtime hasn't changed (unless force backfill)
+      if (!force) {
+        const existing = getSession.get(sessionId) as { file_mtime: number } | null;
+        if (existing && Math.abs(existing.file_mtime - mtime) < 1000) {
+          skipped++;
+          continue;
+        }
       }
 
       const meta = await parseTranscriptStream(filePath);
@@ -863,11 +888,9 @@ function getSystemInventory() {
   // Running dashboards (check ports)
   const dashboardPorts = [
     { port: 8891, name: "Health Dashboard" },
-    { port: 8892, name: "Command Center" },
-    { port: 8893, name: "Finance Dashboard" },
-    { port: 8894, name: "Finance Manager" },
+    { port: 8893, name: "Finance Dashboard v2" },
     { port: 8895, name: "Control Tower" },
-    { port: 8896, name: "Sage Presence" },
+    { port: 8897, name: "Sage Mobile PWA" },
   ];
   // Dashboard health — use cached results (updated async)
   const runningDashboards = dashboardPorts.map(d => ({
@@ -1189,44 +1212,44 @@ function getMaturityAssessment() {
     { id: "AS3", stage: "Assistant", name: "Trusted Companion", description: "Full companion — monitoring, advocacy, protection, authentication" },
   ];
 
-  // Six capability dimensions scored 0-100 — from council review 17 Mar 2026
+  // Six capability dimensions scored 0-100 — updated 9 Apr 2026
   const dimensions = [
-    { name: "Context", score: 82, detail: "Goals, projects, stakeholders, health, finance" },
-    { name: "Personality", score: 78, detail: "DA identity, voice, personality" },
-    { name: "Tool Use", score: 85, detail: "Skills, hooks, MCP integrations, dashboards, CLI tools" },
-    { name: "Awareness", score: 68, detail: "Monitor daemon, health sync, calendar sync" },
-    { name: "Proactivity", score: 62, detail: "Alerts, scheduled syncs, briefings" },
-    { name: "Multitask Scale", score: 58, detail: "Up to 8 parallel agents, background tasks, agent teams" },
+    { name: "Context", score: 88, detail: "Goals, projects, stakeholders, health, finance" },
+    { name: "Personality", score: 82, detail: "DA identity, voice, personality, SkillForge methodology" },
+    { name: "Tool Use", score: 92, detail: "Skills, hooks, dashboards, MCP integrations, CLI tools" },
+    { name: "Awareness", score: 75, detail: "Monitor daemon, health sync, calendar sync, recursive skill improvement" },
+    { name: "Proactivity", score: 72, detail: "Proactive alerts, what-if engine, budget pace warnings, SkillDoctor auto-proposals" },
+    { name: "Multitask Scale", score: 65, detail: "Up to 8 parallel agents, background tasks, agent teams" },
   ];
 
-  const paimScore = 72.2; // From council review 17 Mar 2026
+  const paimScore = 79.0; // Updated 9 Apr 2026 — post Sprint 1/2/3
 
-  // Council fix burndown — 4 critical, 6 high priority
+  // Recent improvements — replaces old council fix burndown
   const councilFixes = [
-    { id: 1, priority: "critical", description: "Stakeholder matching — parse ICS ATTENDEE email", done: true },
-    { id: 2, priority: "critical", description: "VIP email allowlist — family bypass filtering", done: true },
-    { id: 3, priority: "critical", description: "UTC→AEST timezone — SQLite date boundaries", done: true },
-    { id: 4, priority: "critical", description: "Atomic state writes — .tmp then rename", done: true },
-    { id: 5, priority: "high", description: "Cycle lock — prevent overlapping setInterval", done: true },
-    { id: 6, priority: "high", description: "ICS parser — node-ical for RFC 5545 compliance", done: true },
-    { id: 7, priority: "high", description: "Stakeholder PII in voice — first names only (partial)", done: true },
-    { id: 8, priority: "high", description: "$4000 pace threshold — move to config", done: true },
-    { id: 9, priority: "high", description: "Local routing fallback — REMOVED (cloud-first)", done: true },
-    { id: 10, priority: "high", description: "Finance alerts — add delta-from-budget context", done: true },
+    { id: 1, priority: "critical", description: "SkillForge — 4-phase skill creation methodology (Sprint 1)", done: true },
+    { id: 2, priority: "critical", description: "Token Diet — PAI SKILL.md 28% reduction via progressive disclosure (Sprint 2)", done: true },
+    { id: 3, priority: "critical", description: "SkillDoctor — recursive skill improvement in Algorithm LEARN phase (Sprint 3)", done: true },
+    { id: 4, priority: "critical", description: "Finance Dashboard v2 — Sage AI chat with function calling (5 tools)", done: true },
+    { id: 5, priority: "high", description: "Debt trajectory alerts + proactive Sage alerts on Today page", done: true },
+    { id: 6, priority: "high", description: "Savings rate + interest burned metrics on Finance dashboard", done: true },
+    { id: 7, priority: "high", description: "201 duplicate transactions cleaned, 14 merchant normalization rules", done: true },
+    { id: 8, priority: "high", description: "4 new skills — HealthAnalysis, MeetingPrep, WeeklyReview, ProjectDashboard", done: true },
+    { id: 9, priority: "high", description: "skill-index.json — 185 skills indexed for fast capability matching", done: true },
+    { id: 10, priority: "high", description: "Command Center PAI System Status panel — dashboard fleet + inventory", done: true },
   ];
 
-  // Current tier assessment
-  const currentTier = "AG2";
+  // Current tier assessment — updated 9 Apr 2026
+  const currentTier = "AG3";
   const currentIndex = tiers.findIndex(t => t.id === currentTier);
-  const progressPct = Math.round(((currentIndex + 0.7) / tiers.length) * 100); // AG2.7 per PAIMM
+  const progressPct = Math.round(((currentIndex + 0.3) / tiers.length) * 100); // AG3.3
 
-  // What's needed for AG3
+  // What's needed for AS1
   const nextMilestones = [
-    "Continuous background agent operation (not just scheduled)",
-    "Full local + cloud execution flexibility",
-    "Computer usage beyond CLI (screen awareness)",
-    "Voice as primary interface (not secondary)",
-    "Proactive alerts without user triggering",
+    "Voice as primary interface (Web Speech API integration)",
+    "Full autonomous daily operations without prompting",
+    "Cross-device state sync (Mac + iPhone + VPS)",
+    "Natural language budget management via Sage chat",
+    "Authentication layer for network-exposed dashboards",
   ];
 
   return {
@@ -1244,6 +1267,22 @@ function getMaturityAssessment() {
     nextTier: tiers[currentIndex + 1]?.id || "AS3",
     nextTierName: tiers[currentIndex + 1]?.name || "Trusted Companion",
     nextMilestones,
+    // SkillDoctor self-healing awareness
+    skillDoctor: (() => {
+      try {
+        const jsonlPath = join(HOME, ".claude/MEMORY/LEARNING/skill-failures.jsonl");
+        if (!existsSync(jsonlPath)) return { failures: 0, recentFixes: [], active: true };
+        const lines = readFileSync(jsonlPath, "utf-8").trim().split("\n").filter(Boolean);
+        const entries = lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+        const recent = entries.slice(-5).reverse();
+        return { failures: entries.length, recentFixes: recent, active: true };
+      } catch { return { failures: 0, recentFixes: [], active: true }; }
+    })(),
+    // SkillForge stats
+    skillForge: {
+      installed: existsSync(join(HOME, ".claude/skills/Utilities/SkillForge/SKILL.md")),
+      methodology: "Walk Through → Succeed → Codify → Test",
+    },
     source: "danielmiessler.com/blog/personal-ai-maturity-model",
   };
 }
@@ -1740,13 +1779,13 @@ function getSessionIntent(db: Database): {
 } {
   const projectKeywords: Record<string, string[]> = {
     "RivaFlow": ["rivaflow", "riva", "sweet_spot", "bjj", "jiu jitsu"],
-    "Finance": ["finance", "debt", "spending", "budget", "transaction", "sunday money"],
-    "Control Tower": ["control tower", "dashboard", "control-tower"],
+    "Finance": ["finance", "debt", "spending", "budget", "transaction", "sunday money", "dashboard", "rent", "savings rate"],
+    "Control Tower": ["control tower", "control-tower", "command center"],
     "Sage Capture": ["sage capture", "telegram", "sage inbox", "capture app"],
-    // Add your own projects here: "Project Name": ["keyword1", "keyword2"],
+    // Add your own projects: "Project Name": ["keyword1", "keyword2"],
     "AI Art": ["ai art", "post-photographic", "firefly", "no crew", "bag man", "character"],
     "Groot": ["groot", "vps", "hostinger", "openclaw"],
-    "PAI Core": ["algorithm", "pai", "skill", "hook", "steering"],
+    "PAI Core": ["algorithm", "pai", "skill", "hook", "steering", "skillforge", "skilldoctor", "token diet", "paimm", "capability"],
     "Health": ["health", "whoop", "garmin", "recovery", "hrv"],
     "Email": ["email", "newsletter", "inbox", "briefing", "morning"],
     "Coaching": ["coaching", "multiplier", "diminisher", "wiseman", "goal editor"],
@@ -1757,10 +1796,10 @@ function getSessionIntent(db: Database): {
 
   try {
     const sessions = db.prepare(`
-      SELECT task_description, started_at FROM sessions
-      WHERE message_count >= 2 AND duration_mins > 1 AND task_description IS NOT NULL
+      SELECT task_description, started_at, id FROM sessions
+      WHERE message_count >= 2 AND task_description IS NOT NULL AND LENGTH(task_description) > 10
       ORDER BY started_at DESC
-    `).all() as { task_description: string; started_at: string }[];
+    `).all() as any[];
 
     const projectCounts: Record<string, { count: number; lastActive: string }> = {};
 
@@ -2140,6 +2179,17 @@ async function main() {
           console.log(`🔄 Manual sync: ${result.processed} processed`);
         });
         return new Response(JSON.stringify({ status: "sync_started" }), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.pathname === "/api/backfill" && req.method === "POST") {
+        // Force re-parse ALL transcripts (rebuilds task descriptions, tool calls, etc.)
+        console.log("🔄 Starting full backfill...");
+        syncTranscripts(db, true).then(result => {
+          console.log(`✅ Backfill complete: ${result.processed} sessions re-parsed`);
+        });
+        return new Response(JSON.stringify({ status: "backfill_started" }), {
           headers: { "Content-Type": "application/json" },
         });
       }
