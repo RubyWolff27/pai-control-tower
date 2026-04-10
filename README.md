@@ -43,6 +43,10 @@ cd pai-control-tower
 cp src/ControlTower.ts ~/.claude/Tools/ControlTower.ts
 cp src/ct-types.ts ~/.claude/Tools/ct-types.ts
 
+# Copy the dashboard frontend (server loads this at runtime)
+mkdir -p ~/.claude/Tools/public
+cp src/public/control-tower.html ~/.claude/Tools/public/control-tower.html
+
 # Create the database directory
 mkdir -p ~/.claude/data
 

@@ -1,0 +1,3138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PAI Control Tower</title>
+<style>
+  :root {
+    --bg-deep: #0a0e17;
+    --bg-panel: rgba(15, 23, 42, 0.65);
+    --bg-card: rgba(30, 41, 59, 0.45);
+    --border-glass: rgba(100, 160, 255, 0.12);
+    --border-glow: rgba(59, 130, 246, 0.3);
+    --accent: #3b82f6;
+    --accent-bright: #60a5fa;
+    --accent-dim: #1e3a5f;
+    --accent-warm: #f59e0b;
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --text-bright: #f8fafc;
+    --glass-blur: 20px;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --glow-accent: 0 0 30px rgba(59, 130, 246, 0.15);
+    --glow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Scanline effect */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(59, 130, 246, 0.015) 2px,
+      rgba(59, 130, 246, 0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .dashboard {
+    position: relative;
+    z-index: 2;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ─── HEADER ─── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 36px;
+    margin-bottom: 28px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius);
+    box-shadow: var(--glow-card), var(--glow-accent);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-bright), transparent);
+    opacity: 0.6;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .header-icon {
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: linear-gradient(135deg, var(--accent), #8b5cf6);
+    box-shadow: 0 0 24px rgba(59, 130, 246, 0.35);
+    font-size: 24px;
+  }
+
+  .header-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-bright);
+  }
+
+  .header-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .days-alive {
+    text-align: right;
+  }
+
+  .days-alive-number {
+    font-size: 42px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-bright), #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .days-alive-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+  }
+
+  .pulse-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 20px;
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 4px var(--accent-green); }
+    50% { opacity: 0.4; box-shadow: 0 0 12px var(--accent-green); }
+  }
+
+  .pulse-text {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-green);
+    font-weight: 600;
+  }
+
+  .version-badge {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    border: 1px solid var(--border-glass);
+    border-radius: 6px;
+    letter-spacing: 1px;
+  }
+
+  /* ─── TIER LAYOUT ─── */
+  .tier-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent-dim);
+    padding: 12px 4px 4px;
+    opacity: 0.6;
+  }
+
+  /* ─── DASHBOARD RIBBON ─── */
+  .ribbon {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ribbon::-webkit-scrollbar { display: none; }
+  .ribbon-card {
+    flex: 1;
+    min-width: 120px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    text-decoration: none;
+    color: inherit;
+  }
+  .ribbon-card:hover { border-color: var(--accent); }
+  .ribbon-card .ribbon-name { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .ribbon-card .ribbon-status { font-size: 10px; font-weight: 600; }
+  .ribbon-card .ribbon-status.up { color: var(--accent-green); }
+  .ribbon-card .ribbon-status.down { color: var(--accent-red); }
+
+  /* ─── NEXT BEST ACTION ─── */
+  .nba-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .nba-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 246, 0.04));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+  }
+  .nba-card .nba-title { font-size: 14px; font-weight: 600; color: var(--text-bright); margin-bottom: 6px; }
+  .nba-card .nba-reason { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+  .nba-card .nba-tag { display: inline-block; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; padding: 2px 8px; border-radius: 4px; margin-top: 8px; background: rgba(59, 130, 246, 0.15); color: var(--accent-bright); }
+
+  /* ─── PAIMM PANEL ─── */
+  .paimm-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
+  .paimm-score-circle {
+    width: 140px; height: 140px; border-radius: 50%;
+    border: 3px solid var(--accent);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    margin: 0 auto;
+  }
+  .paimm-score-circle .score { font-size: 36px; font-weight: 700; color: var(--accent-bright); }
+  .paimm-score-circle .tier { font-size: 12px; color: var(--text-muted); }
+  .paimm-dimensions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .paimm-dim { background: var(--bg-card); border-radius: 8px; padding: 10px; text-align: center; }
+  .paimm-dim .dim-name { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+  .paimm-dim .dim-score { font-size: 24px; font-weight: 600; color: var(--text); margin: 4px 0; }
+  .paimm-dim .dim-bar { height: 3px; border-radius: 2px; background: var(--bg-deep); overflow: hidden; }
+  .paimm-dim .dim-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+  .burndown-list { margin-top: 12px; }
+  .burndown-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; }
+  .burndown-item .check { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .burndown-item .check.done { background: rgba(34, 197, 94, 0.2); color: var(--accent-green); }
+  .burndown-item .check.pending { background: rgba(100, 116, 139, 0.2); color: var(--text-muted); }
+  .burndown-item .fix-priority { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; }
+  .burndown-item .fix-priority.critical { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+  .burndown-item .fix-priority.high { background: rgba(245, 158, 11, 0.15); color: var(--accent-warm); }
+
+  /* ─── PROJECT DRIFT ─── */
+  .drift-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+  .drift-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+  }
+  .drift-card.drifting { border-color: rgba(245, 158, 11, 0.3); }
+  .drift-card .drift-name { font-size: 13px; font-weight: 600; color: var(--text-bright); }
+  .drift-card .drift-sessions { font-size: 20px; font-weight: 700; color: var(--accent-bright); }
+  .drift-card .drift-last { font-size: 10px; color: var(--text-muted); }
+  .drift-card .drift-warning { font-size: 10px; color: var(--accent-warm); margin-top: 4px; }
+
+  /* ─── DIGITAL TEAM ─── */
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dept-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    transition: border-color 0.2s, transform 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .dept-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .dept-card .dept-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+  .dept-card .dept-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .dept-card .dept-icon { font-size: 18px; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); }
+  .dept-card .dept-name { font-size: 14px; font-weight: 600; color: var(--text-bright); }
+  .dept-card .dept-desc { font-size: 10px; color: var(--text-muted); line-height: 1.4; margin-bottom: 10px; }
+  .dept-card .dept-stats { display: flex; gap: 12px; font-size: 11px; }
+  .dept-card .dept-stat { display: flex; flex-direction: column; align-items: center; }
+  .dept-card .dept-stat-value { font-size: 16px; font-weight: 700; color: var(--text); }
+  .dept-card .dept-stat-label { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .dept-card .dept-last { font-size: 9px; color: var(--text-muted); margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.04); }
+  .dept-card .dept-active { color: var(--accent-green); }
+
+  @media (max-width: 768px) {
+    .paimm-grid { grid-template-columns: 1fr; }
+    .paimm-dimensions { grid-template-columns: repeat(2, 1fr); }
+    .nba-grid { grid-template-columns: 1fr; }
+    .ribbon { flex-wrap: wrap; }
+    .drift-grid { grid-template-columns: repeat(2, 1fr); }
+    .team-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ─── METRICS GRID ─── */
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    padding-left: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border-glass), transparent);
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+
+  .metric-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+
+  .metric-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: var(--glow-accent);
+    transform: translateY(-2px);
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .metric-value {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--text-bright);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric-value.accent { color: var(--accent-bright); }
+  .metric-value.warm { color: var(--accent-warm); }
+  .metric-value.green { color: var(--accent-green); }
+
+  .metric-suffix {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted);
+    margin-left: 4px;
+  }
+
+  .metric-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .sparkline-container {
+    margin-top: 12px;
+    height: 32px;
+  }
+
+  .sparkline-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .sparkline-path {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    opacity: 0.7;
+  }
+
+  .sparkline-area {
+    fill: url(#sparkGradient);
+    opacity: 0.3;
+  }
+
+  /* ─── INVENTORY GRID ─── */
+  .inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+
+  .inv-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 18px;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+
+  .inv-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: var(--glow-accent);
+    transform: translateY(-2px);
+  }
+
+  .inv-icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.3));
+  }
+
+  .inv-count {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text-bright);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .inv-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+
+  .inv-detail {
+    font-size: 11px;
+    color: var(--accent-dim);
+    margin-top: 4px;
+  }
+
+  /* ─── SYSTEM STATUS BAR ─── */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    margin-bottom: 36px;
+  }
+
+  .status-items {
+    display: flex;
+    gap: 24px;
+  }
+
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .status-dot.up { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+  .status-dot.down { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red); }
+
+  .last-synced {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* ─── DASHBOARD FLEET ─── */
+  .fleet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+
+  .fleet-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: all 0.3s ease;
+  }
+
+  .fleet-card:hover {
+    border-color: var(--border-glow);
+  }
+
+  .fleet-port {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--accent-bright);
+    min-width: 48px;
+  }
+
+  .fleet-name {
+    font-size: 13px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .fleet-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  /* ─── PHASE 2: INTELLIGENCE ─── */
+  .chart-panel {
+    background: var(--bg-panel);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chart-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-bright), transparent);
+    opacity: 0.3;
+  }
+
+  .chart-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-bright);
+    margin-bottom: 16px;
+  }
+
+  .chart-svg {
+    width: 100%;
+    height: 180px;
+    display: block;
+  }
+
+  .chart-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .chart-row { grid-template-columns: 1fr; }
+  }
+
+  .stat-pills {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .stat-pill {
+    padding: 6px 14px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid var(--border-glass);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .stat-pill strong {
+    color: var(--accent-bright);
+    margin-right: 4px;
+  }
+
+  .staleness-list {
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-dim) transparent;
+  }
+
+  .stale-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-glass);
+    font-size: 12px;
+  }
+
+  .stale-item:last-child { border-bottom: none; }
+
+  .stale-name {
+    color: var(--text);
+    font-family: 'SF Mono', monospace;
+    font-size: 11px;
+  }
+
+  .stale-days {
+    color: var(--accent-warm);
+    font-weight: 700;
+    font-size: 11px;
+  }
+
+  .meoc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  .meoc-cell {
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-glass);
+  }
+
+  .meoc-cell.mitigate { background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); }
+  .meoc-cell.eliminate { background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); }
+  .meoc-cell.observe { background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.2); }
+  .meoc-cell.contain { background: rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.2); }
+
+  .meoc-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+  }
+
+  .meoc-cell.mitigate .meoc-label { color: var(--accent-warm); }
+  .meoc-cell.eliminate .meoc-label { color: var(--accent-red); }
+  .meoc-cell.observe .meoc-label { color: var(--accent-bright); }
+  .meoc-cell.contain .meoc-label { color: #8b5cf6; }
+
+  .meoc-item {
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 3px 0;
+    font-family: 'SF Mono', monospace;
+  }
+
+  .savings-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border-glass);
+  }
+
+  .savings-bar:last-child { border-bottom: none; }
+
+  .savings-name {
+    font-size: 12px;
+    color: var(--text);
+    min-width: 140px;
+  }
+
+  .savings-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .savings-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .savings-value {
+    font-size: 11px;
+    color: var(--accent-bright);
+    min-width: 60px;
+    text-align: right;
+    font-weight: 700;
+  }
+
+  .savings-hero {
+    text-align: center;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+
+  .savings-hero-number {
+    font-size: 48px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent-green), #86efac);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .savings-hero-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .bar-chart-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  .bar-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 80px;
+    text-align: right;
+  }
+
+  .bar-track {
+    flex: 1;
+    height: 16px;
+    background: var(--bg-card);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .bar-count {
+    font-size: 11px;
+    color: var(--text);
+    min-width: 30px;
+    font-weight: 700;
+  }
+
+  /* ─── PHASE 3: LIVE OPERATIONS ─── */
+  .live-ops-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+
+  .live-indicator.active {
+    background: rgba(34, 197, 94, 0.12);
+    color: var(--accent-green);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .live-indicator.standby {
+    background: rgba(100, 116, 139, 0.12);
+    color: var(--text-muted);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+  }
+
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .live-dot.active {
+    background: var(--accent-green);
+    box-shadow: 0 0 8px var(--accent-green);
+    animation: pulse-dot 2s infinite;
+  }
+
+  .live-dot.standby {
+    background: var(--text-muted);
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent-green); }
+    50% { opacity: 0.5; box-shadow: 0 0 16px var(--accent-green); }
+  }
+
+  .live-elapsed {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-left: 8px;
+  }
+
+  .live-phase-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: auto;
+  }
+
+  .live-phase-badge.observe { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+  .live-phase-badge.think { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+  .live-phase-badge.plan { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+  .live-phase-badge.build { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+  .live-phase-badge.execute { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+  .live-phase-badge.verify { background: rgba(20, 184, 166, 0.15); color: #2dd4bf; }
+  .live-phase-badge.learn { background: rgba(236, 72, 153, 0.15); color: #f472b6; }
+
+  .live-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr 0.8fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .live-feed {
+    max-height: 320px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-dim) transparent;
+  }
+
+  .live-event {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(100, 160, 255, 0.06);
+    transition: background 0.2s;
+  }
+
+  .live-event:hover {
+    background: rgba(59, 130, 246, 0.05);
+  }
+
+  .live-event-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 20px;
+    text-align: center;
+  }
+
+  .live-event-name {
+    color: var(--text);
+    font-weight: 500;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .live-event-time {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    flex-shrink: 0;
+  }
+
+  .live-event.phase {
+    background: rgba(59, 130, 246, 0.06);
+    border-left: 3px solid var(--accent);
+    padding-left: 6px;
+  }
+
+  .live-event.agent {
+    border-left: 3px solid #8b5cf6;
+    padding-left: 6px;
+  }
+
+  /* Session trace timeline */
+  .trace-container {
+    padding: 12px 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-dim) transparent;
+  }
+
+  /* Voice log */
+  .voice-log {
+    max-height: 320px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-dim) transparent;
+  }
+
+  .voice-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px;
+    border-bottom: 1px solid rgba(100, 160, 255, 0.06);
+    font-size: 12px;
+  }
+
+  .voice-entry-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .voice-entry-msg {
+    color: var(--text);
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  .voice-entry-time {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    flex-shrink: 0;
+  }
+
+  .live-empty {
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 24px;
+    font-style: italic;
+  }
+
+  /* ─── PHASE 4: NETWORK & DISCOVERY ─── */
+  .network-container {
+    min-height: 360px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .network-container svg {
+    width: 100%;
+    height: 360px;
+  }
+
+  .opp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+    max-height: 380px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-dim) transparent;
+  }
+
+  .opp-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+
+  .opp-card:hover {
+    border-color: var(--border-glow);
+  }
+
+  .opp-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .opp-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .opp-msg {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    word-wrap: break-word;
+  }
+
+  .opp-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .opp-priority {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .opp-priority.high { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+  .opp-priority.medium { background: rgba(245, 158, 11, 0.15); color: var(--accent-warm); }
+  .opp-priority.low { background: rgba(100, 116, 139, 0.15); color: var(--text-muted); }
+
+  .opp-summary {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  .health-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+  }
+
+  .health-title {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+
+  .health-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1;
+  }
+
+  .health-detail {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* ─── GANTT CHART ─── */
+  .gantt-container {
+    min-height: 80px;
+    overflow-x: auto;
+  }
+  .gantt-row {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    margin-bottom: 2px;
+  }
+  .gantt-row.agent-row {
+    padding-left: 20px;
+  }
+  .gantt-label {
+    width: 120px;
+    min-width: 120px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-align: right;
+    padding-right: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .gantt-label .gantt-type-badge {
+    font-size: 9px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    margin-right: 4px;
+    font-weight: 600;
+  }
+  .gantt-track {
+    flex: 1;
+    height: 20px;
+    position: relative;
+    background: rgba(255,255,255,0.02);
+    border-radius: 4px;
+  }
+  .gantt-bar {
+    position: absolute;
+    height: 100%;
+    border-radius: 4px;
+    min-width: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.9);
+    text-shadow: 0 0 4px rgba(0,0,0,0.5);
+  }
+  .gantt-bar.active {
+    animation: gantt-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes gantt-pulse {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 3px 0 12px rgba(52, 211, 153, 0.6), 0 0 6px rgba(52, 211, 153, 0.3); }
+  }
+  .gantt-time-axis {
+    display: flex;
+    margin-left: 120px;
+    margin-top: 4px;
+    font-size: 9px;
+    color: var(--text-muted);
+  }
+  .gantt-time-axis span {
+    flex: 1;
+    text-align: center;
+  }
+
+  /* ─── COLLAPSIBLE OPPORTUNITIES ─── */
+  .opp-category {
+    margin-bottom: 8px;
+  }
+  .opp-category-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .opp-category-header:hover {
+    background: rgba(255,255,255,0.06);
+  }
+  .opp-category-header .arrow {
+    font-size: 10px;
+    color: var(--text-muted);
+    transition: transform 0.2s;
+    width: 12px;
+  }
+  .opp-category-header.expanded .arrow {
+    transform: rotate(90deg);
+  }
+  .opp-category-header .cat-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+  .opp-category-header .cat-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.05);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .opp-category-items {
+    display: none;
+    padding: 8px 0 0 0;
+  }
+  .opp-category-items.visible {
+    display: block;
+  }
+  .opp-top-actions {
+    margin-bottom: 16px;
+  }
+  .opp-top-actions .chart-title {
+    font-size: 13px;
+    color: #f59e0b;
+    margin-bottom: 8px;
+  }
+  .opp-top-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+  }
+  .opp-card.top-action {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.05);
+  }
+
+  /* ─── MACHINE HEALTH ─── */
+  .machine-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 1000px) { .machine-grid { grid-template-columns: repeat(2, 1fr); } }
+  .machine-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .machine-card-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .machine-hero {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.1;
+  }
+  .machine-hero .unit {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+  .machine-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+  .machine-bar-track {
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .machine-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+  .machine-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .machine-processes {
+    margin-top: 6px;
+  }
+  .machine-proc {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .machine-proc-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .machine-proc-fill {
+    height: 100%;
+    border-radius: 2px;
+  }
+  .machine-proc-name {
+    width: 100px;
+    min-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .machine-recs {
+    grid-column: 1 / -1;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .machine-rec-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    padding: 4px 0;
+  }
+  .machine-rec-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .machine-breakdown {
+    margin-top: 8px;
+  }
+  .machine-breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    text-align: center;
+    padding: 24px;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    opacity: 0.6;
+  }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 1024px) {
+    .dashboard { padding: 16px; }
+    .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .inventory-grid { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+    .header { flex-wrap: wrap; gap: 16px; padding: 20px; }
+    .days-alive-number { font-size: 32px; }
+  }
+
+  @media (max-width: 768px) {
+    .header-right { flex-wrap: wrap; justify-content: flex-end; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .inventory-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ─── LOADING SHIMMER ─── */
+  .loading .metric-value,
+  .loading .inv-count {
+    background: linear-gradient(90deg, var(--bg-card), var(--accent-dim), var(--bg-card));
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* HUD corner accents */
+  .hud-corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border-color: var(--accent);
+    border-style: solid;
+    opacity: 0.3;
+  }
+  .hud-corner.tl { top: 6px; left: 6px; border-width: 2px 0 0 2px; }
+  .hud-corner.tr { top: 6px; right: 6px; border-width: 2px 2px 0 0; }
+  .hud-corner.bl { bottom: 6px; left: 6px; border-width: 0 0 2px 2px; }
+  .hud-corner.br { bottom: 6px; right: 6px; border-width: 0 2px 2px 0; }
+</style>
+</head>
+<body>
+<div class="dashboard loading" id="app">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="hud-corner tl"></div>
+    <div class="hud-corner tr"></div>
+    <div class="hud-corner bl"></div>
+    <div class="hud-corner br"></div>
+    <div class="header-left">
+      <div class="header-icon">🗼</div>
+      <div>
+        <div class="header-title">PAI Control Tower</div>
+        <div class="header-subtitle">Your Name + Your DA &nbsp;|&nbsp; <span id="paiVersion">PAI v4.0.3</span> &nbsp;|&nbsp; Algorithm <span id="algoVersion">v3.7.0</span></div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="pulse-container">
+        <div class="pulse-dot"></div>
+        <div class="pulse-text" id="systemStatus">Initializing</div>
+      </div>
+      <div class="days-alive">
+        <div class="days-alive-number" id="daysAlive">—</div>
+        <div class="days-alive-label">Days Together</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM STATUS BAR -->
+  <div class="status-bar">
+    <div class="status-items">
+      <div class="status-item">
+        <div class="status-dot" id="voiceDot"></div>
+        <span>Voice Server</span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="ollamaDot"></div>
+        <span>Ollama</span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="telegramDot"></div>
+        <span>Telegram</span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot up"></div>
+        <span>Control Tower</span>
+      </div>
+      <div class="status-item">
+        <div class="status-dot" id="grootDot"></div>
+        <span id="grootLabel">Remote Node</span>
+      </div>
+    </div>
+    <div class="last-synced" id="lastSynced">Syncing...</div>
+  </div>
+
+  <!-- TIER 1: RIGHT NOW -->
+  <div class="tier-label">Tier 1 — Right Now</div>
+
+  <!-- DASHBOARD RIBBON -->
+  <div class="ribbon" id="dashRibbon">
+    <!-- Populated by JS -->
+  </div>
+
+  <!-- NEXT BEST ACTION -->
+  <div class="section-title">Next Best Action</div>
+  <div class="nba-grid" id="nbaGrid">
+    <div class="nba-card"><div class="nba-title">Loading...</div></div>
+  </div>
+
+  <!-- CORE METRICS -->
+  <div class="section-title">Operational Metrics</div>
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <div class="metric-label">Conversations</div>
+      <div class="metric-value accent" id="totalSessions">—</div>
+      <div class="metric-sub" id="weekMonth">—</div>
+      <div class="metric-sub" id="agentOpsCount" style="color:var(--muted);font-size:11px;margin-top:2px;">—</div>
+      <div class="sparkline-container" id="sparkSessions"></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Hours Together</div>
+      <div class="metric-value" id="totalHours">—<span class="metric-suffix">hrs</span></div>
+      <div class="metric-sub" id="avgDuration">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Tool Calls</div>
+      <div class="metric-value" id="totalTools">—</div>
+      <div class="metric-sub" id="agentSpawns">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Avg Rating</div>
+      <div class="metric-value warm" id="avgRating">—<span class="metric-suffix">/10</span></div>
+      <div class="metric-sub" id="ratingCount">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Total Storage</div>
+      <div class="metric-value" id="totalStorage">—<span class="metric-suffix">GB</span></div>
+      <div class="metric-sub" id="transcriptStorage">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Reflections</div>
+      <div class="metric-value green" id="reflections">—</div>
+      <div class="metric-sub">Algorithm learning signals</div>
+    </div>
+  </div>
+
+  <!-- TIER 2: SYSTEM STATE -->
+  <div class="tier-label">Tier 2 — System State</div>
+
+  <!-- SYSTEM INVENTORY -->
+  <div class="section-title">System Inventory</div>
+  <div class="inventory-grid">
+    <div class="inv-card">
+      <div class="inv-icon">⚡</div>
+      <div class="inv-count" id="invSkills">—</div>
+      <div class="inv-label">Skills</div>
+      <div class="inv-detail" id="invSkillCats">—</div>
+    </div>
+    <div class="inv-card">
+      <div class="inv-icon">↪</div>
+      <div class="inv-count" id="invHooks">—</div>
+      <div class="inv-label">Hooks</div>
+    </div>
+    <div class="inv-card">
+      <div class="inv-icon">⟳</div>
+      <div class="inv-count" id="invAutomations">—</div>
+      <div class="inv-label">Automations</div>
+    </div>
+    <div class="inv-card">
+      <div class="inv-icon">📋</div>
+      <div class="inv-count" id="invPRDs">—</div>
+      <div class="inv-label">PRDs</div>
+      <div class="inv-detail" id="invPRDDetail">—</div>
+    </div>
+    <div class="inv-card">
+      <div class="inv-icon">🧠</div>
+      <div class="inv-count" id="invMemory">—</div>
+      <div class="inv-label">Memory Files</div>
+    </div>
+    <div class="inv-card">
+      <div class="inv-icon">📊</div>
+      <div class="inv-count" id="invSignals">—</div>
+      <div class="inv-label">Ratings</div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD FLEET -->
+  <div class="section-title">Dashboard Fleet</div>
+  <div class="fleet-grid" id="fleetGrid">
+    <!-- Populated by JS -->
+  </div>
+
+  <!-- DIGITAL TEAM -->
+  <div class="section-title">Digital Team</div>
+  <div class="team-grid" id="teamGrid">
+    <div class="dept-card"><div class="dept-name">Loading departments...</div></div>
+  </div>
+
+  <!-- MACHINE HEALTH -->
+  <div class="section-title">Machine</div>
+  <div class="machine-grid" id="machineGrid">
+    <div class="live-empty">Loading machine metrics...</div>
+  </div>
+
+  <!-- PHASE 3: LIVE OPERATIONS -->
+  <div class="section-title">Live Operations</div>
+  <div class="live-ops-header" id="liveOpsHeader">
+    <!-- Populated by JS: active indicator, elapsed, phase badge -->
+  </div>
+
+  <div class="live-grid">
+    <div class="chart-panel">
+      <div class="chart-title">Activity Feed</div>
+      <div class="live-feed" id="liveFeed">
+        <div class="live-empty">Waiting for data...</div>
+      </div>
+    </div>
+
+    <div class="chart-panel">
+      <div class="chart-title">Session Trace</div>
+      <div class="trace-container" id="sessionTrace">
+        <div class="live-empty">Waiting for data...</div>
+      </div>
+    </div>
+
+    <div class="chart-panel">
+      <div class="chart-title">Voice Activity</div>
+      <div class="voice-log" id="voiceLog">
+        <div class="live-empty">No voice events yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Gantt Chart -->
+  <div class="chart-panel" style="margin-bottom: 16px;">
+    <div class="chart-title">Session Timeline</div>
+    <div class="gantt-container" id="liveGantt">
+      <div class="live-empty">Waiting for session data...</div>
+    </div>
+  </div>
+
+  <!-- TIER 3: INTELLIGENCE & GROWTH -->
+  <div class="tier-label">Tier 3 — Intelligence & Growth</div>
+
+  <!-- PAIMM MATURITY -->
+  <div class="section-title">PAIMM Maturity Journey</div>
+  <div class="chart-panel" style="margin-bottom: 16px;">
+    <div class="paimm-grid" id="paimmPanel">
+      <div style="text-align:center;">
+        <div class="paimm-score-circle">
+          <div class="score" id="paimmScore">—</div>
+          <div class="tier" id="paimmTier">—</div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);" id="paimmProgress">—</div>
+      </div>
+      <div>
+        <div class="paimm-dimensions" id="paimmDimensions"></div>
+        <div class="burndown-list" id="councilBurndown"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECT DRIFT / SESSION INTENT -->
+  <div class="section-title">Project Focus & Drift</div>
+  <div class="chart-panel" style="margin-bottom: 16px;">
+    <div class="drift-grid" id="driftGrid">
+      <div class="drift-card"><div class="drift-name">Loading...</div></div>
+    </div>
+    <div id="driftWarnings" style="margin-top: 12px;"></div>
+  </div>
+
+  <!-- INTELLIGENCE -->
+  <div class="section-title">Intelligence</div>
+
+  <!-- Rating Trend + Algorithm Performance -->
+  <div class="chart-row">
+    <div class="chart-panel">
+      <div class="chart-title">Rating Trend</div>
+      <div class="stat-pills" id="ratingPills"></div>
+      <svg class="chart-svg" id="ratingChart" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Algorithm Performance</div>
+      <div class="stat-pills" id="algoPills"></div>
+      <div id="effortBars"></div>
+    </div>
+  </div>
+
+  <!-- Skill Growth + Time Savings -->
+  <div class="chart-row">
+    <div class="chart-panel">
+      <div class="chart-title">Skill Growth by Category</div>
+      <div id="skillBars"></div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Time Economics</div>
+      <div class="savings-hero">
+        <div class="savings-hero-number" id="savingsHero">—</div>
+        <div class="savings-hero-label">Total Hours Saved (estimated)</div>
+      </div>
+      <div id="savingsBars"></div>
+      <div id="maturityLevel" style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);"></div>
+    </div>
+  </div>
+
+  <!-- Staleness Radar + MEOC Matrix -->
+  <div class="chart-row">
+    <div class="chart-panel">
+      <div class="chart-title">Staleness Radar</div>
+      <div class="stat-pills" id="stalenessPills"></div>
+      <div class="staleness-list" id="stalenessItems"></div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">MEOC Matrix</div>
+      <div class="meoc-grid" id="meocGrid"></div>
+    </div>
+  </div>
+
+  <!-- PHASE 4: NETWORK & DISCOVERY -->
+  <div class="section-title">Network & Discovery</div>
+
+  <!-- Agent Network + Skills + Agents -->
+  <div class="chart-row" style="grid-template-columns: 1.2fr 0.9fr 0.9fr;">
+    <div class="chart-panel">
+      <div class="chart-title">Agent Network</div>
+      <div class="network-container" id="agentNetwork">
+        <div class="live-empty">Loading network...</div>
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Top Skills</div>
+      <div id="topSkills"></div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-title">Top Agents</div>
+      <div id="topAgents"></div>
+    </div>
+  </div>
+
+  <!-- Opportunity Engine -->
+  <div class="chart-panel" style="margin-bottom: 16px;">
+    <div class="chart-title">Opportunity Engine</div>
+    <div class="opp-summary" id="oppSummary"></div>
+    <div class="opp-grid" id="oppGrid">
+      <div class="live-empty">Analyzing system...</div>
+    </div>
+  </div>
+
+  <!-- System Health Insights -->
+  <div class="chart-panel" style="margin-bottom: 24px;">
+    <div class="chart-title">System Health Insights</div>
+    <div class="health-grid" id="healthGrid"></div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    PAI Control Tower &nbsp;·&nbsp; All Phases &nbsp;·&nbsp; Refresh <span id="refreshCounter">60</span>s
+  </div>
+</div>
+
+<script>
+(function() {
+  /*__AUTH_TOKEN__*/
+  const authHeaders = typeof CT_AUTH_TOKEN !== 'undefined' ? { 'Authorization': 'Bearer ' + CT_AUTH_TOKEN } : {};
+  const authFetch = (url, opts) => fetch(url, { ...opts, headers: { ...authHeaders, ...(opts?.headers || {}) } });
+
+  const $ = (id) => document.getElementById(id);
+
+  function formatNumber(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
+
+  function timeAgo(isoStr) {
+    if (!isoStr) return 'Never';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+
+  function buildSparkline(containerId, data, key) {
+    const container = document.getElementById(containerId);
+    if (!container || !data || data.length < 2) return;
+
+    const values = data.map(d => d[key] || 0);
+    const max = Math.max(...values, 1);
+    const min = Math.min(...values);
+    const range = max - min || 1;
+    const w = 200;
+    const h = 32;
+
+    const points = values.map((v, i) => {
+      const x = (i / (values.length - 1)) * w;
+      const y = h - ((v - min) / range) * (h - 4) - 2;
+      return `${x},${y}`;
+    });
+
+    const pathD = 'M' + points.join(' L');
+    const areaD = pathD + ` L${w},${h} L0,${h} Z`;
+
+    container.innerHTML = `
+      <svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sparkGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path class="sparkline-area" d="${areaD}"/>
+        <path class="sparkline-path" d="${pathD}"/>
+      </svg>
+    `;
+  }
+
+  async function fetchData() {
+    try {
+      const [metricsRes, inventoryRes, statusRes] = await Promise.all([
+        authFetch('/api/metrics'),
+        authFetch('/api/inventory'),
+        authFetch('/api/status'),
+      ]);
+
+      const metrics = await metricsRes.json();
+      cachedMetrics = metrics; // Cache for Phase 4 health insights
+      const inventory = await inventoryRes.json();
+      const status = await statusRes.json();
+
+      // Remove loading state
+      document.getElementById('app').classList.remove('loading');
+
+      // Header
+      $('daysAlive').textContent = metrics.daysAlive;
+      $('paiVersion').textContent = 'PAI v' + status.paiVersion;
+      $('algoVersion').textContent = 'v' + status.algorithmVersion;
+      $('systemStatus').textContent = 'Operational';
+
+      // Status bar
+      $('voiceDot').className = 'status-dot ' + (status.voiceServer ? 'up' : 'down');
+      $('ollamaDot').className = 'status-dot ' + (status.ollama ? 'up' : 'down');
+      $('telegramDot').className = 'status-dot ' + (status.telegramBot ? 'up' : 'down');
+      $('grootDot').className = 'status-dot ' + (status.groot ? 'up' : 'down');
+      $('grootLabel').textContent = status.groot ? ('Remote Node' + (status.grootUptime ? ' · ' + status.grootUptime : '')) : 'Remote Node';
+      $('lastSynced').textContent = 'Last synced: ' + timeAgo(metrics.lastSync);
+
+      // Core metrics
+      $('totalSessions').textContent = formatNumber(metrics.totalSessions);
+      $('weekMonth').textContent = metrics.thisWeek + ' this week · ' + metrics.thisMonth + ' this month';
+      $('agentOpsCount').textContent = formatNumber(metrics.totalAgentOps) + ' agent operations (' + (metrics.thisWeekAgentOps || 0) + ' this week)';
+      $('totalHours').innerHTML = metrics.totalActiveHrs + '<span class="metric-suffix">hrs</span>';
+      $('avgDuration').textContent = 'Avg ' + metrics.avgActiveMins + ' min/session';
+      $('totalTools').textContent = formatNumber(metrics.totalToolCalls);
+      $('agentSpawns').textContent = formatNumber(metrics.totalAgentSpawns) + ' agent spawns';
+      $('avgRating').innerHTML = metrics.avgRating + '<span class="metric-suffix">/10</span>';
+      $('ratingCount').textContent = metrics.ratingCount + ' signals collected';
+      $('totalStorage').innerHTML = metrics.totalStorageGB + '<span class="metric-suffix">GB</span>';
+      $('transcriptStorage').textContent = metrics.transcriptStorageGB + ' GB transcripts';
+      $('reflections').textContent = metrics.reflectionCount;
+
+      // Sparkline
+      if (metrics.dailyStats && metrics.dailyStats.length > 1) {
+        buildSparkline('sparkSessions', metrics.dailyStats, 'session_count');
+      }
+
+      // Inventory
+      $('invSkills').textContent = inventory.skills;
+      $('invSkillCats').textContent = inventory.skillCategories + ' categories';
+      $('invHooks').textContent = inventory.hooks;
+      $('invAutomations').textContent = inventory.automations;
+      $('invPRDs').textContent = inventory.prds.total;
+      $('invPRDDetail').textContent = inventory.prds.complete + ' done · ' + inventory.prds.inProgress + ' active';
+      $('invMemory').textContent = inventory.memoryFiles;
+      $('invSignals').textContent = metrics.ratingCount;
+
+      // Dashboard fleet
+      const fleetGrid = $('fleetGrid');
+      fleetGrid.innerHTML = inventory.dashboards.map(d => `
+        <div class="fleet-card">
+          <div class="fleet-port">:${d.port}</div>
+          <div class="fleet-name">${d.name}</div>
+          <div class="fleet-status ${d.running ? 'status-dot up' : 'status-dot down'}"></div>
+        </div>
+      `).join('');
+
+      // Dashboard Ribbon (Tier 1)
+      const ribbon = $('dashRibbon');
+      if (ribbon && inventory.dashboards) {
+        ribbon.innerHTML = inventory.dashboards.map(d => `
+          <a class="ribbon-card" href="http://localhost:${d.port}" target="_blank">
+            <div class="ribbon-name">${d.name}</div>
+            <div class="ribbon-status ${d.running ? 'up' : 'down'}">${d.running ? 'Online' : 'Offline'}</div>
+          </a>
+        `).join('');
+      }
+
+      // Fetch new v2.1 data in parallel
+      try {
+        const [nbaRes, intentRes, maturityRes, deptRes] = await Promise.all([
+          authFetch('/api/next-actions'),
+          authFetch('/api/session-intent'),
+          authFetch('/api/maturity'),
+          authFetch('/api/departments'),
+        ]);
+        const nba = await nbaRes.json();
+        const intent = await intentRes.json();
+        const maturity = await maturityRes.json();
+
+        // Next Best Action
+        const nbaGrid = $('nbaGrid');
+        if (nbaGrid && nba.actions) {
+          nbaGrid.innerHTML = nba.actions.length > 0 ? nba.actions.map(a => `
+            <div class="nba-card">
+              <div class="nba-title">${a.title}</div>
+              <div class="nba-reason">${a.reason}</div>
+              <div class="nba-tag">${a.category}</div>
+            </div>
+          `).join('') : '<div class="nba-card"><div class="nba-title">All clear</div><div class="nba-reason">No urgent actions right now.</div></div>';
+        }
+
+        // PAIMM Maturity
+        if (maturity.paimScore) {
+          $('paimmScore').textContent = maturity.paimScore;
+          $('paimmTier').textContent = maturity.currentTier + ' — ' + (maturity.tiers?.find(t => t.id === maturity.currentTier)?.name || '');
+          $('paimmProgress').textContent = maturity.progressPct + '% toward ' + maturity.nextTierName;
+
+          const dims = $('paimmDimensions');
+          if (dims && maturity.dimensions) {
+            dims.innerHTML = maturity.dimensions.map(d => `
+              <div class="paimm-dim">
+                <div class="dim-name">${d.name}</div>
+                <div class="dim-score">${d.score}</div>
+                <div class="dim-bar"><div class="dim-bar-fill" style="width:${d.score}%;background:${d.score >= 80 ? 'var(--accent-green)' : d.score >= 60 ? 'var(--accent)' : 'var(--accent-warm)'}"></div></div>
+              </div>
+            `).join('');
+          }
+
+          const burndown = $('councilBurndown');
+          if (burndown && maturity.councilFixes) {
+            const fixes = maturity.councilFixes;
+            const doneCount = fixes.filter(f => f.done).length;
+            burndown.innerHTML = `
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;">Council Fixes: ${doneCount}/${fixes.length} complete</div>
+              ${fixes.map(f => `
+                <div class="burndown-item">
+                  <div class="check ${f.done ? 'done' : 'pending'}">${f.done ? '✓' : '○'}</div>
+                  <span class="fix-priority ${f.priority}">${f.priority}</span>
+                  <span style="color:${f.done ? 'var(--text-muted)' : 'var(--text)'};${f.done ? 'text-decoration:line-through;' : ''}">${f.description}</span>
+                </div>
+              `).join('')}
+            `;
+          }
+        }
+
+        // Project Drift
+        const driftGrid = $('driftGrid');
+        if (driftGrid && intent.projects) {
+          driftGrid.innerHTML = intent.projects.slice(0, 12).map(p => `
+            <div class="drift-card ${p.daysAgo > 14 ? 'drifting' : ''}">
+              <div class="drift-name">${p.name}</div>
+              <div class="drift-sessions">${p.sessions}</div>
+              <div class="drift-last">${p.daysAgo === 0 ? 'Active today' : p.daysAgo + 'd ago'}</div>
+              ${p.daysAgo > 14 ? '<div class="drift-warning">⚠ Drifting</div>' : ''}
+            </div>
+          `).join('') || '<div class="drift-card"><div class="drift-name">No project data yet</div></div>';
+        }
+
+        const driftWarnings = $('driftWarnings');
+        if (driftWarnings && intent.driftWarnings?.length > 0) {
+          driftWarnings.innerHTML = intent.driftWarnings.map(w =>
+            `<div style="font-size:11px;color:var(--accent-warm);padding:2px 0;">⚠ ${w}</div>`
+          ).join('');
+        }
+        // Digital Team — Departments
+        const deptData = await deptRes.json();
+        const teamGrid = $('teamGrid');
+        const DEPT_ICONS = { gear: '\u2699', search: '\uD83D\uDD0D', dollar: '\uD83D\uDCB0', mail: '\u2709', palette: '\uD83C\uDFA8', brain: '\uD83E\uDDE0', shield: '\uD83D\uDEE1', chart: '\uD83D\uDCC8' };
+        if (teamGrid && deptData.departments) {
+          teamGrid.innerHTML = deptData.departments.map(d => {
+            const icon = DEPT_ICONS[d.icon] || '\u2699';
+            const lastStr = d.daysAgo === 0 ? '<span class="dept-active">Active today</span>'
+              : d.daysAgo > 0 ? d.daysAgo + 'd ago' : 'No activity yet';
+            return '<div class="dept-card">' +
+              '<div class="dept-accent" style="background:' + d.color + '"></div>' +
+              '<div class="dept-header">' +
+                '<div class="dept-icon" style="color:' + d.color + '">' + icon + '</div>' +
+                '<div class="dept-name">' + d.name + '</div>' +
+              '</div>' +
+              '<div class="dept-desc">' + d.description + '</div>' +
+              '<div class="dept-stats">' +
+                '<div class="dept-stat"><div class="dept-stat-value">' + d.skillCount + '</div><div class="dept-stat-label">Skills</div></div>' +
+                '<div class="dept-stat"><div class="dept-stat-value">' + d.totalSessions + '</div><div class="dept-stat-label">Sessions</div></div>' +
+                '<div class="dept-stat"><div class="dept-stat-value">' + d.weekSessions + '</div><div class="dept-stat-label">This Week</div></div>' +
+              '</div>' +
+              '<div class="dept-last">' + lastStr + '</div>' +
+            '</div>';
+          }).join('');
+        }
+
+      } catch (e) {
+        console.warn('v2.1 fetch error:', e);
+      }
+
+    } catch (err) {
+      console.error('Fetch error:', err);
+      $('systemStatus').textContent = 'Error';
+    }
+  }
+
+  // ─── Phase 3: Live Operations rendering ───
+
+  const PHASE_COLORS = {
+    OBSERVE: '#60a5fa', THINK: '#c084fc', PLAN: '#fbbf24',
+    BUILD: '#fb923c', EXECUTE: '#4ade80', VERIFY: '#2dd4bf', LEARN: '#f472b6'
+  };
+
+  const EVENT_ICONS = {
+    tool_call: '🔧', agent_spawn: '🤖', phase_transition: '⚡', user_message: '💬'
+  };
+
+  function renderLiveHeader(data) {
+    const header = $('liveOpsHeader');
+    const statusClass = data.isActive ? 'active' : 'standby';
+    const statusText = data.isActive ? 'Active Session' : 'Standing By';
+    const elapsed = data.isActive && data.elapsedMins > 0
+      ? `<span class="live-elapsed">${data.elapsedMins}m elapsed</span>` : '';
+    const phaseBadge = data.activePhase
+      ? `<span class="live-phase-badge ${data.activePhase.toLowerCase()}">${data.activePhase}</span>` : '';
+
+    header.innerHTML = `
+      <span class="live-indicator ${statusClass}">
+        <span class="live-dot ${statusClass}"></span>
+        ${statusText}
+      </span>
+      ${elapsed}
+      ${phaseBadge}
+    `;
+  }
+
+  function formatEventTime(ts) {
+    if (!ts) return '';
+    try {
+      const d = new Date(ts);
+      return d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    } catch { return ''; }
+  }
+
+  function renderLiveFeed(data) {
+    const feed = $('liveFeed');
+    const events = data.recentEvents || [];
+    if (!events.length) {
+      feed.innerHTML = '<div class="live-empty">No recent activity</div>';
+      return;
+    }
+
+    feed.innerHTML = events.slice(0, 40).map(evt => {
+      const icon = EVENT_ICONS[evt.type] || '📌';
+      const extraClass = evt.type === 'phase_transition' ? ' phase' : evt.type === 'agent_spawn' ? ' agent' : '';
+      const name = evt.type === 'phase_transition' ? `Phase: ${evt.name}` :
+                   evt.type === 'agent_spawn' ? `Agent: ${evt.name}` :
+                   evt.type === 'user_message' ? 'User Input' : evt.name;
+      const detail = evt.detail ? ` — ${evt.detail}` : '';
+      return `
+        <div class="live-event${extraClass}">
+          <span class="live-event-icon">${icon}</span>
+          <span class="live-event-name" title="${name}${detail}">${name}${detail}</span>
+          <span class="live-event-time">${formatEventTime(evt.timestamp)}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderSessionTrace(data) {
+    const container = $('sessionTrace');
+    const events = (data.recentEvents || []).slice().reverse(); // chronological order
+    if (!events.length) {
+      container.innerHTML = '<div class="live-empty">No trace data</div>';
+      return;
+    }
+
+    // Build SVG timeline — horizontal, scrollable
+    const maxEvents = 50;
+    const shown = events.slice(-maxEvents);
+    const nodeSpacing = 28;
+    const svgWidth = Math.max(600, shown.length * nodeSpacing + 60);
+    const svgHeight = 200;
+    const trackY = 60;
+    const labelY = 100;
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    svg.setAttribute('width', svgWidth);
+    svg.setAttribute('height', svgHeight);
+    svg.style.minWidth = svgWidth + 'px';
+
+    // Track line
+    const line = document.createElementNS(ns, 'line');
+    line.setAttribute('x1', '20'); line.setAttribute('y1', trackY);
+    line.setAttribute('x2', svgWidth - 20); line.setAttribute('y2', trackY);
+    line.setAttribute('stroke', 'rgba(100,160,255,0.15)');
+    line.setAttribute('stroke-width', '2');
+    svg.appendChild(line);
+
+    let currentPhase = null;
+    let phaseStartX = 20;
+
+    shown.forEach((evt, i) => {
+      const x = 30 + i * nodeSpacing;
+
+      // Phase transition — draw phase region background
+      if (evt.type === 'phase_transition') {
+        if (currentPhase) {
+          const rect = document.createElementNS(ns, 'rect');
+          rect.setAttribute('x', phaseStartX);
+          rect.setAttribute('y', '10');
+          rect.setAttribute('width', x - phaseStartX);
+          rect.setAttribute('height', svgHeight - 20);
+          rect.setAttribute('fill', PHASE_COLORS[currentPhase] || '#3b82f6');
+          rect.setAttribute('opacity', '0.04');
+          rect.setAttribute('rx', '6');
+          svg.appendChild(rect);
+        }
+        currentPhase = evt.name;
+        phaseStartX = x;
+
+        // Phase marker — diamond
+        const diamond = document.createElementNS(ns, 'polygon');
+        const s = 8;
+        diamond.setAttribute('points', `${x},${trackY-s} ${x+s},${trackY} ${x},${trackY+s} ${x-s},${trackY}`);
+        diamond.setAttribute('fill', PHASE_COLORS[evt.name] || '#3b82f6');
+        diamond.setAttribute('stroke', PHASE_COLORS[evt.name] || '#3b82f6');
+        diamond.setAttribute('stroke-width', '1');
+        svg.appendChild(diamond);
+
+        // Phase label
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', trackY - 16);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', PHASE_COLORS[evt.name] || '#3b82f6');
+        text.setAttribute('font-size', '9');
+        text.setAttribute('font-weight', '700');
+        text.textContent = evt.name;
+        svg.appendChild(text);
+      } else {
+        // Tool call / agent / user — circle
+        const circle = document.createElementNS(ns, 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', trackY);
+        circle.setAttribute('r', evt.type === 'agent_spawn' ? '5' : '3');
+        const color = evt.type === 'agent_spawn' ? '#8b5cf6' :
+                      evt.type === 'user_message' ? '#f59e0b' :
+                      'rgba(96,165,250,0.6)';
+        circle.setAttribute('fill', color);
+        svg.appendChild(circle);
+      }
+
+      // Time label (every 5th event)
+      if (i % 8 === 0 && evt.timestamp) {
+        const text = document.createElementNS(ns, 'text');
+        text.setAttribute('x', x);
+        text.setAttribute('y', labelY);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('fill', '#64748b');
+        text.setAttribute('font-size', '8');
+        text.setAttribute('font-family', "'SF Mono', monospace");
+        text.textContent = formatEventTime(evt.timestamp);
+        svg.appendChild(text);
+      }
+    });
+
+    // Close last phase region
+    if (currentPhase) {
+      const rect = document.createElementNS(ns, 'rect');
+      rect.setAttribute('x', phaseStartX);
+      rect.setAttribute('y', '10');
+      rect.setAttribute('width', svgWidth - 20 - phaseStartX);
+      rect.setAttribute('height', svgHeight - 20);
+      rect.setAttribute('fill', PHASE_COLORS[currentPhase] || '#3b82f6');
+      rect.setAttribute('opacity', '0.04');
+      rect.setAttribute('rx', '6');
+      svg.appendChild(rect);
+    }
+
+    // Legend
+    const legendItems = [
+      { color: 'rgba(96,165,250,0.6)', label: 'Tool Call', shape: 'circle' },
+      { color: '#8b5cf6', label: 'Agent', shape: 'circle' },
+      { color: '#f59e0b', label: 'User', shape: 'circle' },
+    ];
+    legendItems.forEach((item, i) => {
+      const lx = 20 + i * 80;
+      const ly = svgHeight - 16;
+      const c = document.createElementNS(ns, 'circle');
+      c.setAttribute('cx', lx); c.setAttribute('cy', ly); c.setAttribute('r', '4');
+      c.setAttribute('fill', item.color);
+      svg.appendChild(c);
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', lx + 8); t.setAttribute('y', ly + 3);
+      t.setAttribute('fill', '#64748b'); t.setAttribute('font-size', '9');
+      t.textContent = item.label;
+      svg.appendChild(t);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+  }
+
+  function renderVoiceLog(data) {
+    const log = $('voiceLog');
+    const events = data.events || [];
+    if (!events.length) {
+      log.innerHTML = '<div class="live-empty">No voice events yet</div>';
+      return;
+    }
+
+    log.innerHTML = events.slice(0, 20).map(evt => `
+      <div class="voice-entry">
+        <span class="voice-entry-icon">🔊</span>
+        <span class="voice-entry-msg">${evt.message}</span>
+        <span class="voice-entry-time">${formatEventTime(evt.timestamp)}</span>
+      </div>
+    `).join('');
+  }
+
+  const GANTT_PHASE_COLOR = '#f59e0b';
+  const GANTT_AGENT_COLOR = '#3b82f6';
+  const GANTT_TOOL_COLOR = '#34d399';
+
+  function renderGantt(liveData) {
+    const container = $('liveGantt');
+    const events = (liveData.recentEvents || []).slice().reverse(); // chronological
+    if (!events.length) {
+      container.innerHTML = '<div class="live-empty">No activity detected in current session</div>';
+      return;
+    }
+
+    // Build swim lanes from events
+    // 1. Algorithm phases as primary rows
+    // 2. Agent spawns as child rows under phases
+    // 3. Tool activity as background context
+
+    const lanes = []; // { type, name, startTime, endTime, color, isChild }
+    let currentPhase = null;
+    const agentLanes = new Map(); // agentType -> { start, lastSeen }
+    const toolClusters = new Map(); // toolName -> { start, lastSeen, count }
+
+    for (const evt of events) {
+      const ts = new Date(evt.timestamp).getTime();
+      if (isNaN(ts)) continue;
+
+      if (evt.type === 'phase_transition') {
+        // Close previous phase
+        if (currentPhase) currentPhase.endTime = ts;
+        currentPhase = { type: 'phase', name: evt.name, startTime: ts, endTime: null, color: PHASE_COLORS[evt.name] || GANTT_PHASE_COLOR, isChild: false };
+        lanes.push(currentPhase);
+      }
+
+      if (evt.type === 'agent_spawn') {
+        const key = evt.name;
+        if (!agentLanes.has(key)) {
+          agentLanes.set(key, { type: 'agent', name: key, startTime: ts, endTime: null, color: AGENT_COLORS[key] || GANTT_AGENT_COLOR, isChild: true });
+        } else {
+          agentLanes.get(key).endTime = ts; // extend
+        }
+      }
+
+      if (evt.type === 'tool_call') {
+        const key = evt.name;
+        if (!toolClusters.has(key)) {
+          toolClusters.set(key, { count: 1, startTime: ts, endTime: ts });
+        } else {
+          const c = toolClusters.get(key);
+          c.count++;
+          c.endTime = ts;
+        }
+      }
+    }
+
+    // Close active phase
+    if (currentPhase && !currentPhase.endTime && liveData.isActive) {
+      currentPhase.endTime = null; // still active
+    } else if (currentPhase && !currentPhase.endTime) {
+      currentPhase.endTime = Date.now();
+    }
+
+    // Add agent lanes
+    for (const [, lane] of agentLanes) {
+      if (liveData.isActive && !lane.endTime) lane.endTime = null; // active
+      lanes.push(lane);
+    }
+
+    // Add top 3 most-used tool clusters as lanes
+    const sortedTools = [...toolClusters.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 3);
+    for (const [name, cluster] of sortedTools) {
+      if (cluster.count >= 2) {
+        lanes.push({ type: 'tool', name: `${name} (${cluster.count}x)`, startTime: cluster.startTime, endTime: cluster.endTime, color: GANTT_TOOL_COLOR, isChild: false });
+      }
+    }
+
+    if (!lanes.length) {
+      container.innerHTML = '<div class="live-empty">No phases, agents, or significant tool activity in view</div>';
+      return;
+    }
+
+    // Time range
+    let minTime = Infinity, maxTime = 0;
+    for (const l of lanes) {
+      if (l.startTime < minTime) minTime = l.startTime;
+      const end = l.endTime || Date.now();
+      if (end > maxTime) maxTime = end;
+    }
+    if (liveData.startedAt) {
+      const ss = new Date(liveData.startedAt).getTime();
+      if (ss < minTime) minTime = ss;
+    }
+    const range = maxTime - minTime || 1;
+
+    // Sort: phases first, then agents, then tools
+    const order = { phase: 0, agent: 1, tool: 2 };
+    lanes.sort((a, b) => (order[a.type] || 9) - (order[b.type] || 9) || a.startTime - b.startTime);
+
+    let html = '';
+    for (const lane of lanes) {
+      const startPct = ((lane.startTime - minTime) / range * 100).toFixed(1);
+      const endTime = lane.endTime || Date.now();
+      const widthPct = Math.max(2, (endTime - lane.startTime) / range * 100);
+      const isActive = lane.endTime === null;
+      const durationMins = Math.round((endTime - lane.startTime) / 60000 * 10) / 10;
+
+      const typeLabel = lane.type === 'phase' ? 'PHASE' : lane.type === 'agent' ? 'AGENT' : 'TOOL';
+      const typeBg = lane.type === 'phase' ? 'rgba(245,158,11,0.2)' : lane.type === 'agent' ? 'rgba(59,130,246,0.2)' : 'rgba(52,211,153,0.2)';
+      const typeColor = lane.type === 'phase' ? '#f59e0b' : lane.type === 'agent' ? '#60a5fa' : '#34d399';
+
+      html += `
+        <div class="gantt-row ${lane.isChild ? 'agent-row' : ''}">
+          <div class="gantt-label"><span class="gantt-type-badge" style="background:${typeBg};color:${typeColor};">${typeLabel}</span>${lane.name}</div>
+          <div class="gantt-track">
+            <div class="gantt-bar ${isActive ? 'active' : ''}"
+                 style="left:${startPct}%; width:${widthPct.toFixed(1)}%; background:${lane.color}; opacity:${isActive ? 1 : 0.7};">
+              ${durationMins >= 0.1 ? durationMins + 'm' : '<1m'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Time axis
+    const totalMins = Math.ceil(range / 60000);
+    const ticks = Math.min(6, Math.max(2, totalMins));
+    let axisHtml = '<div class="gantt-time-axis">';
+    for (let i = 0; i <= ticks; i++) {
+      const mins = Math.round((i / ticks) * totalMins);
+      axisHtml += `<span>${mins}m</span>`;
+    }
+    axisHtml += '</div>';
+
+    container.innerHTML = html + axisHtml;
+  }
+
+  async function fetchLive() {
+    try {
+      const [liveRes, voiceRes] = await Promise.all([
+        authFetch('/api/live'),
+        authFetch('/api/voice-log'),
+      ]);
+      const liveData = await liveRes.json();
+      const voiceData = await voiceRes.json();
+
+      renderLiveHeader(liveData);
+      renderLiveFeed(liveData);
+      renderSessionTrace(liveData);
+      renderVoiceLog(voiceData);
+      renderGantt(liveData);
+    } catch (err) {
+      console.error('Live fetch error:', err);
+    }
+  }
+
+  // ─── Phase 2: Intelligence rendering ───
+
+  function renderRatingChart(data) {
+    const pills = $('ratingPills');
+    pills.innerHTML = `
+      <div class="stat-pill"><strong>${data.avg}</strong>/10 avg</div>
+      <div class="stat-pill"><strong>${data.count}</strong> signals</div>
+    `;
+
+    const svg = $('ratingChart');
+    const ratings = data.ratings;
+    if (!ratings.length) { svg.innerHTML = '<text x="300" y="90" fill="#64748b" text-anchor="middle" font-size="13">No rating data yet</text>'; return; }
+
+    const w = 600, h = 180, pad = 30;
+    const pw = w - pad * 2, ph = h - pad * 2;
+
+    // Build line chart
+    const points = ratings.map((r, i) => {
+      const x = pad + (i / Math.max(ratings.length - 1, 1)) * pw;
+      const y = pad + ph - ((r.rating - 1) / 9) * ph;
+      return { x, y };
+    });
+
+    const maPoints = ratings.map((r, i) => {
+      const x = pad + (i / Math.max(ratings.length - 1, 1)) * pw;
+      const y = pad + ph - ((r.movingAvg - 1) / 9) * ph;
+      return { x, y };
+    });
+
+    const linePath = 'M' + points.map(p => `${p.x},${p.y}`).join(' L');
+    const maPath = 'M' + maPoints.map(p => `${p.x},${p.y}`).join(' L');
+
+    // Y-axis labels
+    let yLabels = '';
+    for (let i = 1; i <= 10; i += 3) {
+      const y = pad + ph - ((i - 1) / 9) * ph;
+      yLabels += `<text x="${pad - 8}" y="${y + 4}" fill="#64748b" font-size="10" text-anchor="end">${i}</text>`;
+      yLabels += `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="rgba(100,160,255,0.06)" stroke-width="1"/>`;
+    }
+
+    svg.innerHTML = `
+      ${yLabels}
+      <path d="${linePath}" fill="none" stroke="rgba(59,130,246,0.25)" stroke-width="1"/>
+      ${points.map(p => `<circle cx="${p.x}" cy="${p.y}" r="2.5" fill="#3b82f6" opacity="0.6"/>`).join('')}
+      <path d="${maPath}" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.8"/>
+    `;
+  }
+
+  function renderAlgoPerformance(data) {
+    const pills = $('algoPills');
+    pills.innerHTML = `
+      <div class="stat-pill"><strong>${data.passRate}%</strong> pass rate</div>
+      <div class="stat-pill"><strong>${data.totalPassed}</strong>/${data.totalCriteria} criteria</div>
+      <div class="stat-pill"><strong>${data.budgetAdherence}%</strong> on budget</div>
+      <div class="stat-pill"><strong>${data.avgSentiment}</strong>/10 sentiment</div>
+    `;
+
+    const bars = $('effortBars');
+    const maxCount = Math.max(...data.effortDistribution.map(e => e.count), 1);
+    const colors = { Extended: '#3b82f6', Deep: '#8b5cf6', Standard: '#22c55e', Advanced: '#f59e0b', Comprehensive: '#ef4444' };
+
+    bars.innerHTML = data.effortDistribution.map(e => `
+      <div class="bar-chart-row">
+        <div class="bar-label">${e.level}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: ${(e.count / maxCount) * 100}%; background: ${colors[e.level] || '#3b82f6'};"></div>
+        </div>
+        <div class="bar-count">${e.count}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderSkillGrowth(data) {
+    const bars = $('skillBars');
+    const maxCount = Math.max(...data.byCategory.map(c => c.count), 1);
+    const catColors = ['#3b82f6','#8b5cf6','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#14b8a6','#f97316','#6366f1',
+                       '#84cc16','#a855f7','#0ea5e9','#e11d48','#10b981','#eab308','#7c3aed','#2563eb','#dc2626'];
+
+    bars.innerHTML = data.byCategory.map((c, i) => `
+      <div class="bar-chart-row">
+        <div class="bar-label">${c.category}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width: ${(c.count / maxCount) * 100}%; background: ${catColors[i % catColors.length]};"></div>
+        </div>
+        <div class="bar-count">${c.count}</div>
+      </div>
+    `).join('');
+  }
+
+  function renderTimeSavings(data) {
+    const hero = $('savingsHero');
+    hero.textContent = data.cumulativeHrs.low + '–' + data.cumulativeHrs.high;
+
+    const bars = $('savingsBars');
+    const maxMins = Math.max(...data.automations.map(a => a.dailyMinsHigh), 1);
+
+    const ratioColor = data.ratio.weekly >= 1 ? '#22c55e' : '#f59e0b';
+    const ratioLabel = data.ratio.weekly >= 1 ? 'Net positive' : 'Building phase';
+    const totalRatioColor = data.ratio.total >= 1 ? '#22c55e' : '#f59e0b';
+
+    bars.innerHTML = `
+      <!-- Time Saved Section -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">This Week</div>
+          <div style="font-size:20px;font-weight:700;color:#22c55e;margin-top:2px;">${data.weeklyHrs.low}–${data.weeklyHrs.high}h</div>
+          <div style="font-size:10px;color:var(--text-muted);">saved</div>
+        </div>
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">This Month</div>
+          <div style="font-size:20px;font-weight:700;color:#22c55e;margin-top:2px;">${data.monthlyHrs.low}–${data.monthlyHrs.high}h</div>
+          <div style="font-size:10px;color:var(--text-muted);">saved</div>
+        </div>
+        <div style="background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.1);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">All Time</div>
+          <div style="font-size:20px;font-weight:700;color:#86efac;margin-top:2px;">${data.cumulativeHrs.low}–${data.cumulativeHrs.high}h</div>
+          <div style="font-size:10px;color:var(--text-muted);">saved</div>
+        </div>
+      </div>
+      <!-- Hours Together -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Together This Week</div>
+          <div style="font-size:20px;font-weight:700;color:#93c5fd;margin-top:2px;">${data.timeTogetherHrs.thisWeek}h</div>
+        </div>
+        <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.1);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Together This Month</div>
+          <div style="font-size:20px;font-weight:700;color:#93c5fd;margin-top:2px;">${data.timeTogetherHrs.thisMonth}h</div>
+        </div>
+        <div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.1);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Together All Time</div>
+          <div style="font-size:20px;font-weight:700;color:#60a5fa;margin-top:2px;">${data.timeTogetherHrs.total}h</div>
+        </div>
+      </div>
+      <!-- Ratio -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Weekly Save:Spend</div>
+          <div style="font-size:22px;font-weight:700;color:${ratioColor};margin-top:2px;">${data.ratio.weekly}x</div>
+          <div style="font-size:10px;color:var(--text-muted);">${ratioLabel}</div>
+        </div>
+        <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.12);border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">All-Time Save:Spend</div>
+          <div style="font-size:22px;font-weight:700;color:${totalRatioColor};margin-top:2px;">${data.ratio.total}x</div>
+          <div style="font-size:10px;color:var(--text-muted);">Day ${data.daysSinceInception}</div>
+        </div>
+      </div>
+      <!-- Per-automation breakdown -->
+    ` + data.automations.map(a => `
+      <div class="savings-bar">
+        <div class="savings-name">${a.name}</div>
+        <div class="savings-track">
+          <div class="savings-fill" style="width: ${(a.dailyMinsHigh / maxMins) * 100}%;"></div>
+        </div>
+        <div class="savings-value">${a.dailyMinsLow}–${a.dailyMinsHigh}m/day</div>
+      </div>
+    `).join('');
+  }
+
+  function renderMaturity(data) {
+    const el = $('maturityLevel');
+    if (!el || !data) return;
+
+    const stageColors = { Chatbot: '#6b7280', Agent: '#3b82f6', Assistant: '#22c55e' };
+    const currentIdx = data.currentIndex;
+
+    // Progress bar segments
+    const segments = data.tiers.map((t, i) => {
+      const isCurrent = t.id === data.currentTier;
+      const isPast = i < currentIdx;
+      const color = isPast || isCurrent ? stageColors[t.stage] : 'rgba(255,255,255,0.08)';
+      const opacity = isCurrent ? '1' : isPast ? '0.6' : '0.3';
+      const border = isCurrent ? `2px solid ${stageColors[t.stage]}` : '1px solid rgba(255,255,255,0.05)';
+      return `<div title="${t.id}: ${t.name}" style="flex:1;height:28px;background:${color};opacity:${opacity};border:${border};border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:${isCurrent?'700':'400'};color:${isCurrent?'#fff':'rgba(255,255,255,0.4)'};">${t.id}</div>`;
+    }).join('');
+
+    // Dimension bars
+    const dimBars = data.dimensions.map(d => `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div style="width:70px;font-size:11px;color:var(--text-muted);">${d.name}</div>
+        <div style="flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;">
+          <div style="width:${d.score}%;height:100%;background:${d.score>=70?'#22c55e':d.score>=50?'#3b82f6':'#f59e0b'};border-radius:3px;"></div>
+        </div>
+        <div style="width:28px;font-size:11px;color:var(--text-muted);text-align:right;">${d.score}</div>
+      </div>
+    `).join('');
+
+    el.innerHTML = `
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">PAI Maturity (PAIMM — Miessler)</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        <div style="font-size:24px;font-weight:800;color:${stageColors[data.tiers[currentIdx].stage]};">${data.currentTier}</div>
+        <div style="font-size:13px;color:var(--text-muted);">${data.tiers[currentIdx].name}</div>
+        <div style="margin-left:auto;font-size:11px;color:var(--text-muted);">Next: ${data.nextTier}</div>
+      </div>
+      <div style="display:flex;gap:2px;margin-bottom:12px;">${segments}</div>
+      <div style="margin-bottom:8px;">${dimBars}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:right;">
+        <a href="https://${data.source}" target="_blank" style="color:rgba(255,255,255,0.3);text-decoration:none;">PAIMM v1.0</a>
+      </div>
+    `;
+  }
+
+  function renderStaleness(data) {
+    const pills = $('stalenessPills');
+    pills.innerHTML = `
+      <div class="stat-pill"><strong>${data.staleMemoryCount}</strong> stale memory files</div>
+      <div class="stat-pill"><strong>${data.stuckPRDCount}</strong> stuck PRDs</div>
+    `;
+
+    const list = $('stalenessItems');
+    const items = [
+      ...data.staleMemory.map(m => ({ name: m.name, days: m.daysSinceUpdate, type: 'memory' })),
+      ...data.stuckPRDs.map(p => ({ name: p.name, days: p.daysSinceUpdate, type: 'PRD (' + p.status + ')' })),
+    ].sort((a, b) => b.days - a.days).slice(0, 15);
+
+    list.innerHTML = items.length ? items.map(i => `
+      <div class="stale-item">
+        <span class="stale-name">${i.name}</span>
+        <span class="stale-days">${i.days}d · ${i.type}</span>
+      </div>
+    `).join('') : '<div class="stale-item"><span class="stale-name" style="color:var(--accent-green)">Everything fresh</span></div>';
+  }
+
+  function renderMEOC(data) {
+    const grid = $('meocGrid');
+    const cats = [
+      { key: 'mitigate', label: 'Mitigate', cls: 'mitigate' },
+      { key: 'eliminate', label: 'Eliminate', cls: 'eliminate' },
+      { key: 'observe', label: 'Observe', cls: 'observe' },
+      { key: 'contain', label: 'Contain', cls: 'contain' },
+    ];
+
+    grid.innerHTML = cats.map(c => `
+      <div class="meoc-cell ${c.cls}">
+        <div class="meoc-label">${c.label}</div>
+        ${(data.meoc[c.key] || []).length
+          ? data.meoc[c.key].map(i => `<div class="meoc-item">${i}</div>`).join('')
+          : '<div class="meoc-item" style="opacity:0.4">None detected</div>'}
+      </div>
+    `).join('');
+  }
+
+  // ─── Phase 4: Network & Discovery rendering ───
+
+  const AGENT_COLORS = {
+    'general-purpose': '#60a5fa', 'Explore': '#34d399', 'Engineer': '#f97316',
+    'ClaudeResearcher': '#a78bfa', 'Architect': '#f472b6', 'Designer': '#fbbf24',
+    'BrowserAgent': '#2dd4bf', 'Plan': '#818cf8', 'Bash': '#94a3b8',
+    'GeminiResearcher': '#4ade80', 'PerplexityResearcher': '#c084fc',
+    'Intern': '#fb923c', 'GrokResearcher': '#e879f9', 'claude-code-guide': '#67e8f9',
+    'Artist': '#fca5a5', 'Algorithm': '#38bdf8', 'QATester': '#86efac',
+    'CodexResearcher': '#d8b4fe', 'RedTeam': '#ef4444',
+  };
+
+  function renderAgentNetwork(data) {
+    const container = $('agentNetwork');
+    const nodes = data.nodes || [];
+    const edges = data.edges || [];
+    if (!nodes.length) { container.innerHTML = '<div class="live-empty">No agent data</div>'; return; }
+
+    const W = 580, H = 360;
+    const ns = 'http://www.w3.org/2000/svg';
+
+    // Initialize node positions
+    const maxCount = Math.max(...nodes.map(n => n.count));
+    const nodeMap = {};
+    nodes.forEach((n, i) => {
+      const angle = (i / nodes.length) * Math.PI * 2;
+      const r = 120;
+      nodeMap[n.id] = {
+        ...n,
+        x: W/2 + Math.cos(angle) * r + (Math.random() - 0.5) * 40,
+        y: H/2 + Math.sin(angle) * r + (Math.random() - 0.5) * 40,
+        vx: 0, vy: 0,
+        radius: 8 + (n.count / maxCount) * 20,
+      };
+    });
+
+    // Simple force simulation (Fruchterman-Reingold inspired)
+    const k = 80; // ideal distance
+    for (let iter = 0; iter < 200; iter++) {
+      const temp = 1 - iter / 200;
+
+      // Repulsion between all pairs
+      const nodeList = Object.values(nodeMap);
+      for (let i = 0; i < nodeList.length; i++) {
+        for (let j = i + 1; j < nodeList.length; j++) {
+          const a = nodeList[i], b = nodeList[j];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+          const force = (k * k) / dist * 0.3;
+          const fx = (dx / dist) * force * temp;
+          const fy = (dy / dist) * force * temp;
+          a.vx += fx; a.vy += fy;
+          b.vx -= fx; b.vy -= fy;
+        }
+      }
+
+      // Attraction along edges
+      for (const e of edges) {
+        const a = nodeMap[e.source], b = nodeMap[e.target];
+        if (!a || !b) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const force = (dist - k) * 0.01 * Math.min(e.weight, 5) * temp;
+        const fx = (dx / dist) * force;
+        const fy = (dy / dist) * force;
+        a.vx += fx; a.vy += fy;
+        b.vx -= fx; b.vy -= fy;
+      }
+
+      // Centering force
+      for (const n of nodeList) {
+        n.vx += (W/2 - n.x) * 0.005;
+        n.vy += (H/2 - n.y) * 0.005;
+        n.x += n.vx * 0.5;
+        n.y += n.vy * 0.5;
+        n.vx *= 0.8; n.vy *= 0.8;
+        // Bounds
+        const pad = n.radius + 30;
+        n.x = Math.max(pad, Math.min(W - pad, n.x));
+        n.y = Math.max(pad, Math.min(H - pad, n.y));
+      }
+    }
+
+    // Render SVG
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+
+    // Edges
+    const maxWeight = Math.max(...edges.map(e => e.weight), 1);
+    for (const e of edges) {
+      const a = nodeMap[e.source], b = nodeMap[e.target];
+      if (!a || !b) continue;
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+      line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+      line.setAttribute('stroke', 'rgba(100,160,255,0.15)');
+      line.setAttribute('stroke-width', 1 + (e.weight / maxWeight) * 3);
+      svg.appendChild(line);
+    }
+
+    // Nodes
+    for (const n of Object.values(nodeMap)) {
+      // Glow
+      const glow = document.createElementNS(ns, 'circle');
+      glow.setAttribute('cx', n.x); glow.setAttribute('cy', n.y);
+      glow.setAttribute('r', n.radius + 4);
+      const color = AGENT_COLORS[n.id] || '#60a5fa';
+      glow.setAttribute('fill', color);
+      glow.setAttribute('opacity', '0.15');
+      svg.appendChild(glow);
+
+      // Node circle
+      const circle = document.createElementNS(ns, 'circle');
+      circle.setAttribute('cx', n.x); circle.setAttribute('cy', n.y);
+      circle.setAttribute('r', n.radius);
+      circle.setAttribute('fill', color);
+      circle.setAttribute('stroke', 'rgba(255,255,255,0.2)');
+      circle.setAttribute('stroke-width', '1');
+      svg.appendChild(circle);
+
+      // Count label (inside node)
+      const countText = document.createElementNS(ns, 'text');
+      countText.setAttribute('x', n.x); countText.setAttribute('y', n.y + 4);
+      countText.setAttribute('text-anchor', 'middle');
+      countText.setAttribute('fill', '#fff');
+      countText.setAttribute('font-size', Math.max(9, n.radius * 0.6));
+      countText.setAttribute('font-weight', '700');
+      countText.textContent = n.count;
+      svg.appendChild(countText);
+
+      // Name label (below node)
+      const label = document.createElementNS(ns, 'text');
+      label.setAttribute('x', n.x); label.setAttribute('y', n.y + n.radius + 12);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('fill', '#94a3b8');
+      label.setAttribute('font-size', '9');
+      label.textContent = n.id.length > 14 ? n.id.slice(0, 12) + '...' : n.id;
+      svg.appendChild(label);
+    }
+
+    container.innerHTML = '';
+    container.appendChild(svg);
+  }
+
+  function renderBarChart(containerId, items, colors) {
+    const container = $(containerId);
+    if (!items.length) { container.innerHTML = '<div class="live-empty">No data yet</div>'; return; }
+    const maxCount = items[0].count;
+    container.innerHTML = items.slice(0, 12).map((t, i) => {
+      const pct = (t.count / maxCount * 100).toFixed(0);
+      const color = colors[i % colors.length];
+      return `
+        <div class="bar-chart-row">
+          <span class="bar-label">${t.name}</span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${pct}%; background:${color};"></div>
+          </div>
+          <span class="bar-count">${t.count.toLocaleString()}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const SKILL_COLORS = ['#f59e0b','#fbbf24','#f97316','#fb923c','#eab308','#facc15',
+    '#d97706','#ea580c','#ca8a04','#b45309','#a16207','#92400e'];
+  const AGENT_CHART_COLORS = ['#3b82f6','#60a5fa','#818cf8','#a78bfa','#34d399','#4ade80',
+    '#f472b6','#e879f9','#2dd4bf','#67e8f9','#93c5fd','#c084fc'];
+
+  const OPP_ICONS = {
+    stuck_prd: '📋', uninvoked_skill: '🔌', storage: '💾',
+    algorithm: '⚙️', memory: '🧠',
+  };
+
+  const OPP_CAT_NAMES = {
+    stuck_prd: 'Stuck PRDs',
+    uninvoked_skill: 'Uninvoked Skills',
+    storage: 'Storage Warnings',
+    algorithm: 'Algorithm Patterns',
+    memory: 'Stale Memory Files',
+  };
+
+  function renderOppCard(r, isTopAction) {
+    return `
+      <div class="opp-card ${isTopAction ? 'top-action' : ''}">
+        <span class="opp-icon">${OPP_ICONS[r.category] || '💡'}</span>
+        <div class="opp-body">
+          <div class="opp-msg">${r.message}</div>
+          <div class="opp-meta">
+            <span class="opp-priority ${r.priority}">${r.priority}</span>
+            &nbsp; ${(r.category || '').replace(/_/g, ' ')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderOpportunities(data) {
+    const summary = $('oppSummary');
+    const grid = $('oppGrid');
+    const recs = data.recommendations || [];
+
+    summary.innerHTML = `
+      <div class="stat-pill"><strong>${data.counts.total}</strong> recommendations</div>
+      <div class="stat-pill" style="border-color:rgba(239,68,68,0.3);"><strong>${data.counts.high}</strong> high priority</div>
+      <div class="stat-pill"><strong>${data.stuckPRDCount}</strong> stuck PRDs</div>
+      <div class="stat-pill"><strong>${data.uninvokedSkillCount}</strong> uninvoked skills</div>
+    `;
+
+    if (!recs.length) {
+      grid.innerHTML = '<div class="live-empty">System is healthy — no recommendations</div>';
+      return;
+    }
+
+    // Top 5 highest-impact items (high priority first, then by category diversity)
+    const topActions = recs.filter(r => r.priority === 'high').slice(0, 5);
+    if (topActions.length < 5) {
+      const remaining = recs.filter(r => r.priority === 'medium' && !topActions.includes(r));
+      topActions.push(...remaining.slice(0, 5 - topActions.length));
+    }
+
+    // Group by category
+    const categories = {};
+    for (const r of recs) {
+      if (!categories[r.category]) categories[r.category] = [];
+      categories[r.category].push(r);
+    }
+
+    let html = '';
+
+    // Top Actions hero
+    if (topActions.length) {
+      html += `
+        <div class="opp-top-actions">
+          <div class="chart-title" style="font-size:13px;color:#f59e0b;margin-bottom:8px;">Top Actions</div>
+          <div class="opp-top-grid">
+            ${topActions.map(r => renderOppCard(r, true)).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // Collapsible categories
+    for (const [cat, items] of Object.entries(categories)) {
+      const catName = OPP_CAT_NAMES[cat] || cat.replace(/_/g, ' ');
+      const icon = OPP_ICONS[cat] || '💡';
+      const catId = 'opp-cat-' + cat;
+      html += `
+        <div class="opp-category">
+          <div class="opp-category-header" onclick="this.classList.toggle('expanded'); document.getElementById('${catId}').classList.toggle('visible');">
+            <span class="arrow">▶</span>
+            <span>${icon}</span>
+            <span class="cat-name">${catName}</span>
+            <span class="cat-count">${items.length}</span>
+          </div>
+          <div class="opp-category-items" id="${catId}">
+            <div class="opp-grid">
+              ${items.slice(0, 10).map(r => renderOppCard(r, false)).join('')}
+              ${items.length > 10 ? `<div class="live-empty" style="grid-column:1/-1;font-size:11px;">+ ${items.length - 10} more</div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  function renderHealthInsights(networkData, oppData, metrics) {
+    const grid = $('healthGrid');
+    const cards = [];
+
+    // Agent diversity
+    const agentTypes = (networkData.nodes || []).length;
+    const totalSpawns = (networkData.nodes || []).reduce((s, n) => s + n.count, 0);
+    cards.push({
+      title: 'Agent Diversity',
+      value: `${agentTypes} types`,
+      detail: `${totalSpawns} total spawns across sessions`,
+    });
+
+    // Skill variety
+    const skillCount = (networkData.topSkills || []).length;
+    const topSkill = (networkData.topSkills || [])[0];
+    cards.push({
+      title: 'Skill Ecosystem',
+      value: `${skillCount} skills`,
+      detail: topSkill ? `Most used: ${topSkill.name} (${topSkill.count.toLocaleString()})` : 'Syncing skill data...',
+    });
+
+    // Recommendation density
+    cards.push({
+      title: 'Action Items',
+      value: `${oppData.counts.total}`,
+      detail: `${oppData.counts.high} high · ${oppData.counts.medium} medium · ${oppData.counts.low} low priority`,
+    });
+
+    // System age & growth
+    cards.push({
+      title: 'System Maturity',
+      value: `Day ${metrics?.daysAlive || '?'}`,
+      detail: `${metrics?.totalSessions || '?'} conversations · ${metrics?.totalActiveHrs || '?'}h together`,
+    });
+
+    grid.innerHTML = cards.map(c => `
+      <div class="health-card">
+        <div class="health-title">${c.title}</div>
+        <div class="health-value">${c.value}</div>
+        <div class="health-detail">${c.detail}</div>
+      </div>
+    `).join('');
+  }
+
+  // ─── Machine Health renderer ───
+  function getBarColor(pct) {
+    if (pct < 50) return '#34d399';
+    if (pct < 75) return '#fbbf24';
+    if (pct < 90) return '#f97316';
+    return '#ef4444';
+  }
+
+  function renderMachine(data) {
+    const grid = $('machineGrid');
+    const cpu = data.cpu;
+    const mem = data.memory;
+    const disk = data.disk;
+    const bat = data.battery;
+    const up = data.uptime;
+    const recs = data.recommendations || [];
+
+    const loadPct = cpu.loadAvg[0] ? Math.min(100, Math.round(cpu.loadAvg[0] / cpu.cores * 100)) : 0;
+
+    let html = '';
+
+    // CPU card
+    html += `
+      <div class="machine-card">
+        <div class="machine-card-title">CPU</div>
+        <div class="machine-hero">${loadPct}<span class="unit">%</span></div>
+        <div class="machine-sub">${cpu.model}</div>
+        <div class="machine-sub">${cpu.cores} cores · Load: ${cpu.loadAvg.map(l => l.toFixed(1)).join(' ')}</div>
+        <div class="machine-bar-track">
+          <div class="machine-bar-fill" style="width:${loadPct}%;background:${getBarColor(loadPct)};"></div>
+        </div>
+        <div class="machine-processes">
+          ${cpu.topProcesses.slice(0, 4).map(p => `
+            <div class="machine-proc">
+              <span class="machine-proc-name">${p.name}</span>
+              <div class="machine-proc-bar">
+                <div class="machine-proc-fill" style="width:${Math.min(100, p.cpu)}%;background:${getBarColor(p.cpu)};"></div>
+              </div>
+              <span>${p.cpu.toFixed(0)}%</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Memory card
+    html += `
+      <div class="machine-card">
+        <div class="machine-card-title">Memory</div>
+        <div class="machine-hero">${mem.usedGB.toFixed(1)}<span class="unit"> / ${mem.totalGB} GB</span></div>
+        <div class="machine-sub">Pressure: ${mem.pressurePct}% · Wired: ${mem.wiredGB.toFixed(1)} GB</div>
+        <div class="machine-bar-track">
+          <div class="machine-bar-fill" style="width:${mem.pressurePct}%;background:${getBarColor(mem.pressurePct)};"></div>
+        </div>
+        <div class="machine-detail-row"><span>Free</span><span>${mem.freeGB.toFixed(1)} GB</span></div>
+        <div class="machine-detail-row"><span>Used</span><span>${mem.usedGB.toFixed(1)} GB</span></div>
+        <div class="machine-detail-row"><span>Wired</span><span>${mem.wiredGB.toFixed(1)} GB</span></div>
+      </div>
+    `;
+
+    // Disk card
+    html += `
+      <div class="machine-card">
+        <div class="machine-card-title">Disk</div>
+        <div class="machine-hero">${disk.freeGB}<span class="unit"> GB free</span></div>
+        <div class="machine-sub">${disk.usedGB} / ${disk.totalGB} GB (${disk.usedPct}% used)</div>
+        <div class="machine-bar-track">
+          <div class="machine-bar-fill" style="width:${disk.usedPct}%;background:${getBarColor(disk.usedPct)};"></div>
+        </div>
+        <div class="machine-breakdown">
+          ${(disk.breakdown || []).slice(0, 5).map(d => `
+            <div class="machine-breakdown-row"><span>${d.name}</span><span>${d.sizeGB} GB</span></div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    // Battery + Uptime card
+    html += `
+      <div class="machine-card">
+        <div class="machine-card-title">Battery & Uptime</div>
+        <div class="machine-hero">${bat.currentPct}<span class="unit">%</span> ${bat.isCharging ? '⚡' : ''}</div>
+        <div class="machine-sub">Health: ${bat.health}% · ${bat.cycleCount} cycles</div>
+        <div class="machine-bar-track">
+          <div class="machine-bar-fill" style="width:${bat.currentPct}%;background:${bat.currentPct > 20 ? '#34d399' : '#ef4444'};"></div>
+        </div>
+        <div class="machine-detail-row" style="margin-top:12px;"><span>Uptime</span><span>${up.formatted}</span></div>
+        <div class="machine-detail-row"><span>Uptime hours</span><span>${up.hours}h</span></div>
+      </div>
+    `;
+
+    // Recommendations row (full width)
+    if (recs.length) {
+      html += `
+        <div class="machine-recs">
+          <div class="machine-card-title">Sage Recommendations</div>
+          ${recs.map(r => {
+            const isWarning = r.includes('CPU') || r.includes('full') || r.includes('pressure') || r.includes('restart');
+            const color = isWarning ? '#f97316' : '#34d399';
+            return `<div class="machine-rec-item"><div class="machine-rec-dot" style="background:${color};"></div>${r}</div>`;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    grid.innerHTML = html;
+  }
+
+  async function fetchMachine() {
+    try {
+      const res = await authFetch('/api/machine');
+      const data = await res.json();
+      renderMachine(data);
+    } catch (err) {
+      console.error('Machine fetch error:', err);
+    }
+  }
+
+  let cachedMetrics = null;
+  async function fetchPhase4() {
+    try {
+      const [networkRes, oppRes] = await Promise.all([
+        authFetch('/api/agent-network'),
+        authFetch('/api/opportunities'),
+      ]);
+      const networkData = await networkRes.json();
+      const oppData = await oppRes.json();
+
+      renderAgentNetwork(networkData);
+      renderBarChart('topSkills', networkData.topSkills || [], SKILL_COLORS);
+      renderBarChart('topAgents', networkData.topAgents || [], AGENT_CHART_COLORS);
+      renderOpportunities(oppData);
+      renderHealthInsights(networkData, oppData, cachedMetrics);
+    } catch (err) {
+      console.error('Phase 4 fetch error:', err);
+    }
+  }
+
+  async function fetchPhase2() {
+    try {
+      const [ratingsRes, reflectionsRes, skillsRes, stalenessRes, savingsRes, maturityRes] = await Promise.all([
+        authFetch('/api/ratings'),
+        authFetch('/api/reflections'),
+        authFetch('/api/skills-timeline'),
+        authFetch('/api/staleness'),
+        authFetch('/api/time-savings'),
+        authFetch('/api/maturity'),
+      ]);
+
+      const [ratings, reflections, skills, staleness, savings, maturity] = await Promise.all([
+        ratingsRes.json(), reflectionsRes.json(), skillsRes.json(), stalenessRes.json(), savingsRes.json(), maturityRes.json(),
+      ]);
+
+      renderRatingChart(ratings);
+      renderAlgoPerformance(reflections);
+      renderSkillGrowth(skills);
+      renderTimeSavings(savings);
+      renderMaturity(maturity);
+      renderStaleness(staleness);
+      renderMEOC(staleness);
+    } catch (err) {
+      console.error('Phase 2 fetch error:', err);
+    }
+  }
+
+  // Initial load
+  fetchData().then(() => fetchPhase4()); // Phase 4 needs metrics cached
+  fetchPhase2();
+  fetchLive();
+  fetchMachine();
+
+  // Live operations: refresh every 10 seconds
+  setInterval(fetchLive, 10000);
+
+  // Auto-refresh every 60 seconds
+  let countdown = 60;
+  setInterval(() => {
+    countdown--;
+    const el = $('refreshCounter');
+    if (el) el.textContent = countdown;
+    if (countdown <= 0) {
+      countdown = 60;
+      fetchData();
+      fetchMachine();
+    }
+  }, 1000);
+})();
+</script>
+</body>
+</html>
