@@ -22,6 +22,7 @@ const HOOKS_DIR = join(HOME, ".claude/hooks");
 const LAUNCH_AGENTS_DIR = join(HOME, "Library/LaunchAgents");
 const MEMORY_DIR = join(HOME, ".claude/projects//memory");
 const WORK_DIR = join(HOME, ".claude/MEMORY/WORK");
+const WIKI_DIR = join(HOME, ".claude/MEMORY/WIKI");
 const RATINGS_PATH = join(HOME, ".claude/MEMORY/LEARNING/SIGNALS/ratings.jsonl");
 const REFLECTIONS_PATH = join(HOME, ".claude/MEMORY/LEARNING/REFLECTIONS/algorithm-reflections.jsonl");
 const PUBLIC_DIR = join(import.meta.dir, "public");
@@ -910,6 +911,594 @@ function getSystemInventory() {
   };
 }
 
+// ─── Wiki Dashboard Data ────────────────────────────────────────────────────
+
+interface WikiEntity {
+  id: string;           // "people/peter-yang"
+  name: string;
+  type: "people" | "tools" | "concepts" | "projects" | "areas";
+  watch: boolean;
+  last_seen: string | null;
+  last_refreshed: string | null;
+  sources: string[];
+  related: string[];    // e.g. ["tools/claude-code", "concepts/curation"]
+}
+
+interface WikiSource {
+  filename: string;
+  date: string;
+  title: string;
+  entities_touched: string[];
+}
+
+interface WikiLensEntry {
+  id: string;
+  name: string;
+  type: string;
+  degree?: number;
+  last_seen?: string | null;
+}
+
+interface WikiData {
+  counts: { people: number; tools: number; concepts: number; projects: number; areas: number; sources: number };
+  watchCount: number;
+  lastRefreshed: string | null;
+  recentSources: WikiSource[];
+  entities: WikiEntity[];
+  edges: Array<{ from: string; to: string }>;
+  refreshQueue: number;
+  lenses: {
+    mostConnected: WikiLensEntry[];
+    orphans: WikiLensEntry[];
+    recentlyTouched: WikiLensEntry[];
+  };
+}
+
+function parseWikiFrontmatter(content: string): Record<string, unknown> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const body = match[1];
+  const result: Record<string, unknown> = {};
+  const lines = body.split("\n");
+  let currentKey: string | null = null;
+  let currentList: string[] | null = null;
+  for (const line of lines) {
+    if (/^\s*-\s+/.test(line) && currentKey) {
+      const item = line.replace(/^\s*-\s+/, "").trim();
+      if (currentList) currentList.push(item);
+      continue;
+    }
+    const kv = line.match(/^([a-zA-Z_][\w-]*):\s*(.*)$/);
+    if (!kv) continue;
+    if (currentKey && currentList) {
+      result[currentKey] = currentList;
+      currentList = null;
+    }
+    const [, key, rawVal] = kv;
+    const val = rawVal.trim();
+    currentKey = key;
+    if (val === "") {
+      currentList = [];
+    } else if (val === "true" || val === "false") {
+      result[key] = val === "true";
+      currentKey = null;
+    } else {
+      result[key] = val.replace(/^["']|["']$/g, "");
+      currentKey = null;
+    }
+  }
+  if (currentKey && currentList) result[currentKey] = currentList;
+  return result;
+}
+
+function getWikiData(): WikiData {
+  const empty: WikiData = {
+    counts: { people: 0, tools: 0, concepts: 0, projects: 0, sources: 0 },
+    watchCount: 0,
+    lastRefreshed: null,
+    recentSources: [],
+    entities: [],
+    edges: [],
+    refreshQueue: 0,
+  };
+  if (!existsSync(WIKI_DIR)) return empty;
+
+  const ENTITY_TYPES: WikiEntity["type"][] = ["people", "tools", "concepts", "projects", "areas"];
+  const entities: WikiEntity[] = [];
+  const counts = { people: 0, tools: 0, concepts: 0, projects: 0, areas: 0, sources: 0 };
+  let watchCount = 0;
+  let latestRefresh: string | null = null;
+
+  for (const type of ENTITY_TYPES) {
+    const dir = join(WIKI_DIR, "entities", type);
+    if (!existsSync(dir)) continue;
+    let files: string[] = [];
+    try {
+      files = readdirSync(dir).filter((f) => f.endsWith(".md"));
+    } catch {
+      continue;
+    }
+    counts[type] = files.length;
+    for (const file of files) {
+      const path = join(dir, file);
+      let content = "";
+      try {
+        content = readFileSync(path, "utf-8");
+      } catch {
+        continue;
+      }
+      const fm = parseWikiFrontmatter(content);
+      const id = `${type}/${file.replace(/\.md$/, "")}`;
+      const watch = fm.watch === true;
+      if (watch) watchCount++;
+      const lastRefreshed = typeof fm.last_refreshed === "string" ? fm.last_refreshed : null;
+      if (lastRefreshed && (!latestRefresh || lastRefreshed > latestRefresh)) {
+        latestRefresh = lastRefreshed;
+      }
+      entities.push({
+        id,
+        name: (fm.name as string) || file.replace(/\.md$/, ""),
+        type,
+        watch,
+        last_seen: typeof fm.last_seen === "string" ? fm.last_seen : null,
+        last_refreshed: lastRefreshed,
+        sources: (fm.sources as string[]) || [],
+        related: (fm.related as string[]) || [],
+      });
+    }
+  }
+
+  // Build entity ID set for edge validation
+  const entityIds = new Set(entities.map((e) => e.id));
+  const edges: Array<{ from: string; to: string }> = [];
+  for (const entity of entities) {
+    for (const rel of entity.related) {
+      // related is "type/kebab-name" format
+      if (entityIds.has(rel)) {
+        edges.push({ from: entity.id, to: rel });
+      }
+    }
+  }
+
+  // Recent sources
+  const sourcesDir = join(WIKI_DIR, "sources");
+  const recentSources: WikiSource[] = [];
+  if (existsSync(sourcesDir)) {
+    let files: string[] = [];
+    try {
+      files = readdirSync(sourcesDir).filter((f) => f.endsWith(".md"));
+    } catch {
+      files = [];
+    }
+    // Filenames are YYYYMMDD-slug — sort desc
+    files.sort().reverse();
+    counts.sources = files.length;
+    for (const file of files.slice(0, 10)) {
+      const path = join(sourcesDir, file);
+      let content = "";
+      try {
+        content = readFileSync(path, "utf-8");
+      } catch {
+        continue;
+      }
+      const fm = parseWikiFrontmatter(content);
+      const dateMatch = file.match(/^(\d{4})(\d{2})(\d{2})-/);
+      const date = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : "";
+      recentSources.push({
+        filename: file,
+        date,
+        title: (fm.title as string) || file.replace(/\.md$/, ""),
+        entities_touched: (fm.entities_touched as string[]) || [],
+      });
+    }
+  }
+
+  // Refresh queue
+  let refreshQueue = 0;
+  const queuePath = join(WIKI_DIR, "refresh-queue.json");
+  if (existsSync(queuePath)) {
+    try {
+      const queue = JSON.parse(readFileSync(queuePath, "utf-8"));
+      refreshQueue = Array.isArray(queue.items) ? queue.items.length : 0;
+    } catch {}
+  }
+
+  // ─── Compiled lenses (replace the graph-as-default) ───
+  // Degree = inbound + outbound edges
+  const degreeMap = new Map<string, number>();
+  for (const e of edges) {
+    degreeMap.set(e.from, (degreeMap.get(e.from) || 0) + 1);
+    degreeMap.set(e.to, (degreeMap.get(e.to) || 0) + 1);
+  }
+
+  const mostConnected: WikiLensEntry[] = entities
+    .map((e) => ({ id: e.id, name: e.name, type: e.type, degree: degreeMap.get(e.id) || 0 }))
+    .sort((a, b) => (b.degree || 0) - (a.degree || 0))
+    .slice(0, 8);
+
+  const orphans: WikiLensEntry[] = entities
+    .filter((e) => (degreeMap.get(e.id) || 0) === 0)
+    .map((e) => ({ id: e.id, name: e.name, type: e.type }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .slice(0, 8);
+
+  const recentlyTouched: WikiLensEntry[] = entities
+    .filter((e) => e.last_seen)
+    .map((e) => ({ id: e.id, name: e.name, type: e.type, last_seen: e.last_seen }))
+    .sort((a, b) => (b.last_seen || "").localeCompare(a.last_seen || ""))
+    .slice(0, 8);
+
+  return {
+    counts,
+    watchCount,
+    lastRefreshed: latestRefresh,
+    recentSources,
+    entities,
+    edges,
+    refreshQueue,
+    lenses: { mostConnected, orphans, recentlyTouched },
+  };
+}
+
+interface WikiEntityDetail {
+  found: boolean;
+  id: string;
+  name: string;
+  type: string;
+  frontmatter: Record<string, unknown>;
+  summary: string;           // first substantive paragraph (pre-compiled truth, not re-synthesized)
+  sections: Array<{ heading: string; body: string }>;
+  claimsBySource: Array<{ source: string; claims: string[] }>;
+  contradictions: string;    // body of ## Contradictions section, if present
+  related: Array<{ id: string; name: string; type: string; exists: boolean }>;
+  // Reverse-lookup enrichment
+  relatedFrom: Array<{ id: string; name: string; type: string }>;      // entities whose `related:` lists this one
+  areasContaining: Array<{ id: string; name: string }>;                // areas where this appears in related
+  conceptsOriginated: Array<{ id: string; name: string }>;             // concepts whose `origin:` names this person
+  sourcesCiting: Array<{ filename: string; title: string; date: string }>; // sources where this appears in entities_touched
+  sources: string[];
+  editorUrl: string;         // vscode://file/...
+  filePath: string;
+}
+
+function extractSections(body: string): Array<{ heading: string; body: string }> {
+  const sections: Array<{ heading: string; body: string }> = [];
+  const lines = body.split("\n");
+  let current: { heading: string; body: string[] } | null = null;
+  for (const line of lines) {
+    const h = line.match(/^##\s+(.+)$/);
+    if (h) {
+      if (current) sections.push({ heading: current.heading, body: current.body.join("\n").trim() });
+      current = { heading: h[1].trim(), body: [] };
+    } else if (current) {
+      current.body.push(line);
+    }
+  }
+  if (current) sections.push({ heading: current.heading, body: current.body.join("\n").trim() });
+  return sections;
+}
+
+function getWikiEntity(id: string): WikiEntityDetail {
+  const empty: WikiEntityDetail = {
+    found: false, id, name: "", type: "", frontmatter: {}, summary: "",
+    sections: [], claimsBySource: [], contradictions: "", related: [],
+    relatedFrom: [], areasContaining: [], conceptsOriginated: [], sourcesCiting: [],
+    sources: [],
+    editorUrl: "", filePath: "",
+  };
+  const parts = id.split("/");
+  if (parts.length !== 2) return empty;
+  const [type, slug] = parts;
+  const path = join(WIKI_DIR, "entities", type, `${slug}.md`);
+  if (!existsSync(path)) return empty;
+
+  let content = "";
+  try {
+    content = readFileSync(path, "utf-8");
+  } catch {
+    return empty;
+  }
+  const fm = parseWikiFrontmatter(content);
+  // Strip frontmatter to get body
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+
+  // First substantive paragraph = summary (after any H1)
+  const bodyNoH1 = body.replace(/^#\s+.+\n/, "").trim();
+  const firstPara = bodyNoH1.split(/\n\n+/).find((p) => p.trim() && !p.startsWith("#")) || "";
+
+  const sections = extractSections(body);
+
+  // Claims grouped by source — look for inline citations like "— *source-title (date)*"
+  const claimsBySource = new Map<string, string[]>();
+  for (const section of sections) {
+    if (section.heading.toLowerCase().includes("contradiction")) continue;
+    const lines = section.body.split("\n").filter((l) => l.trim().startsWith("-") || l.trim().startsWith("*"));
+    for (const line of lines) {
+      const citeMatch = line.match(/—\s*\*?([^*]+?)\*?$/);
+      if (!citeMatch) continue;
+      const source = citeMatch[1].trim();
+      const claim = line.replace(/^\s*[-*]\s*/, "").replace(/—\s*\*?[^*]+?\*?$/, "").trim();
+      if (!claimsBySource.has(source)) claimsBySource.set(source, []);
+      claimsBySource.get(source)!.push(claim);
+    }
+  }
+
+  const contradictionSection = sections.find((s) => s.heading.toLowerCase().includes("contradiction"));
+  const contradictions = contradictionSection?.body.trim() || "";
+
+  // Resolve related entities to check existence
+  const relatedRaw = (fm.related as string[]) || [];
+  const related = relatedRaw.map((rel) => {
+    const relParts = rel.split("/");
+    if (relParts.length !== 2) return { id: rel, name: rel, type: "", exists: false };
+    const [relType, relSlug] = relParts;
+    const relPath = join(WIKI_DIR, "entities", relType, `${relSlug}.md`);
+    const exists = existsSync(relPath);
+    let name = relSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (exists) {
+      try {
+        const relContent = readFileSync(relPath, "utf-8");
+        const relFm = parseWikiFrontmatter(relContent);
+        if (typeof relFm.name === "string") name = relFm.name;
+      } catch {}
+    }
+    return { id: rel, name, type: relType, exists };
+  });
+
+  // ─── Reverse lookups ───
+  // Scan all other entities once; cheap at our scale.
+  const relatedFrom: Array<{ id: string; name: string; type: string }> = [];
+  const areasContaining: Array<{ id: string; name: string }> = [];
+  const conceptsOriginated: Array<{ id: string; name: string }> = [];
+  const entityOwnName = (fm.name as string) || slug;
+  const ALL_TYPES = ["people", "tools", "concepts", "projects", "areas"];
+  for (const otherType of ALL_TYPES) {
+    const oDir = join(WIKI_DIR, "entities", otherType);
+    if (!existsSync(oDir)) continue;
+    let oFiles: string[] = [];
+    try { oFiles = readdirSync(oDir).filter((f) => f.endsWith(".md")); } catch { continue; }
+    for (const oFile of oFiles) {
+      const oPath = join(oDir, oFile);
+      if (oPath === path) continue;
+      let oContent = "";
+      try { oContent = readFileSync(oPath, "utf-8"); } catch { continue; }
+      const oFm = parseWikiFrontmatter(oContent);
+      const oName = (oFm.name as string) || oFile.replace(/\.md$/, "");
+      const oId = `${otherType}/${oFile.replace(/\.md$/, "")}`;
+      const oRelated = (oFm.related as string[]) || [];
+      if (oRelated.includes(id)) {
+        relatedFrom.push({ id: oId, name: oName, type: otherType });
+        if (otherType === "areas") areasContaining.push({ id: oId, name: oName });
+      }
+      // Concepts originated by this person — concept.origin contains person's name
+      if (type === "people" && otherType === "concepts") {
+        const origin = (oFm.origin as string) || "";
+        if (origin && origin.toLowerCase().includes(entityOwnName.toLowerCase())) {
+          conceptsOriginated.push({ id: oId, name: oName });
+        }
+      }
+    }
+  }
+
+  // Sources citing this entity (entities_touched in source frontmatter)
+  const sourcesCiting: Array<{ filename: string; title: string; date: string }> = [];
+  const sourcesDir = join(WIKI_DIR, "sources");
+  if (existsSync(sourcesDir)) {
+    let sFiles: string[] = [];
+    try { sFiles = readdirSync(sourcesDir).filter((f) => f.endsWith(".md")); } catch { sFiles = []; }
+    for (const sFile of sFiles) {
+      let sContent = "";
+      try { sContent = readFileSync(join(sourcesDir, sFile), "utf-8"); } catch { continue; }
+      const sFm = parseWikiFrontmatter(sContent);
+      const touched = (sFm.entities_touched as string[]) || [];
+      if (touched.includes(id)) {
+        const sTitle = (sFm.title as string) || sFile;
+        const dateMatch = sFile.match(/^(\d{4})(\d{2})(\d{2})-/);
+        const sDate = dateMatch ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}` : "";
+        sourcesCiting.push({ filename: sFile, title: sTitle, date: sDate });
+      }
+    }
+  }
+
+  return {
+    found: true,
+    id,
+    name: (fm.name as string) || slug,
+    type,
+    frontmatter: fm,
+    summary: firstPara,
+    sections,
+    claimsBySource: Array.from(claimsBySource.entries()).map(([source, claims]) => ({ source, claims })),
+    contradictions,
+    related,
+    relatedFrom,
+    areasContaining,
+    conceptsOriginated,
+    sourcesCiting,
+    sources: (fm.sources as string[]) || [],
+    editorUrl: `vscode://file${path}`,
+    filePath: path,
+  };
+}
+
+interface WikiSourceDetail {
+  found: boolean;
+  filename: string;
+  title: string;
+  frontmatter: Record<string, unknown>;
+  summary: string;
+  keyTakeaways: string[];
+  entitiesTouched: Array<{ id: string; name: string; type: string; exists: boolean }>;
+  contradictionsFound: string;
+  alignmentsFound: string;
+  editorUrl: string;
+  filePath: string;
+  rawPath: string | null;
+}
+
+function getWikiSource(filename: string): WikiSourceDetail {
+  const empty: WikiSourceDetail = {
+    found: false, filename, title: "", frontmatter: {}, summary: "",
+    keyTakeaways: [], entitiesTouched: [], contradictionsFound: "", alignmentsFound: "",
+    editorUrl: "", filePath: "", rawPath: null,
+  };
+  if (!filename) return empty;
+  const safe = basename(filename);
+  const path = join(WIKI_DIR, "sources", safe);
+  if (!existsSync(path)) return empty;
+
+  let content = "";
+  try {
+    content = readFileSync(path, "utf-8");
+  } catch {
+    return empty;
+  }
+  const fm = parseWikiFrontmatter(content);
+  const body = content.replace(/^---\n[\s\S]*?\n---\n?/, "");
+  const sections = extractSections(body);
+
+  const summarySection = sections.find((s) => s.heading.toLowerCase() === "summary");
+  const takeawaysSection = sections.find((s) => s.heading.toLowerCase().includes("takeaway"));
+  const contradictionsSection = sections.find((s) => s.heading.toLowerCase().includes("contradiction"));
+  const alignmentsSection = sections.find((s) => s.heading.toLowerCase().includes("alignment"));
+
+  const keyTakeaways = takeawaysSection
+    ? takeawaysSection.body
+        .split("\n")
+        .filter((l) => /^\s*[-*]/.test(l))
+        .map((l) => l.replace(/^\s*[-*]\s*/, "").trim())
+        .filter(Boolean)
+    : [];
+
+  const entitiesRaw = (fm.entities_touched as string[]) || [];
+  const entitiesTouched = entitiesRaw.map((e) => {
+    const parts = e.split("/");
+    if (parts.length !== 2) return { id: e, name: e, type: "", exists: false };
+    const [type, slug] = parts;
+    const entityPath = join(WIKI_DIR, "entities", type, `${slug}.md`);
+    const exists = existsSync(entityPath);
+    let name = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    if (exists) {
+      try {
+        const c = readFileSync(entityPath, "utf-8");
+        const efm = parseWikiFrontmatter(c);
+        if (typeof efm.name === "string") name = efm.name;
+      } catch {}
+    }
+    return { id: e, name, type, exists };
+  });
+
+  const rawFilename = safe;
+  const rawPath = join(WIKI_DIR, "raw", rawFilename);
+  const rawExists = existsSync(rawPath);
+
+  return {
+    found: true,
+    filename: safe,
+    title: (fm.title as string) || safe,
+    frontmatter: fm,
+    summary: summarySection?.body.trim() || "",
+    keyTakeaways,
+    entitiesTouched,
+    contradictionsFound: contradictionsSection?.body.trim() || "",
+    alignmentsFound: alignmentsSection?.body.trim() || "",
+    editorUrl: `vscode://file${path}`,
+    filePath: path,
+    rawPath: rawExists ? rawPath : null,
+  };
+}
+
+interface WikiSearchHit {
+  kind: "entity" | "source";
+  id: string;                // entity id ("tools/claude-code") or source filename
+  name: string;
+  type: string;
+  snippet: string;           // ~160 chars of matching context
+  matchField: "name" | "body" | "frontmatter";
+}
+
+function searchWiki(query: string): { query: string; total: number; hits: WikiSearchHit[] } {
+  const q = query.trim().toLowerCase();
+  if (!q || q.length < 2) return { query, total: 0, hits: [] };
+  const hits: WikiSearchHit[] = [];
+
+  // Search entities across all four types
+  const ENTITY_TYPES = ["people", "tools", "concepts", "projects"];
+  for (const type of ENTITY_TYPES) {
+    const dir = join(WIKI_DIR, "entities", type);
+    if (!existsSync(dir)) continue;
+    let files: string[] = [];
+    try { files = readdirSync(dir).filter((f) => f.endsWith(".md")); } catch { continue; }
+    for (const file of files) {
+      const path = join(dir, file);
+      let content = "";
+      try { content = readFileSync(path, "utf-8"); } catch { continue; }
+      const fm = parseWikiFrontmatter(content);
+      const name = (fm.name as string) || file.replace(/\.md$/, "");
+      const slug = file.replace(/\.md$/, "");
+      const id = `${type}/${slug}`;
+      const lcName = name.toLowerCase();
+      const lcContent = content.toLowerCase();
+
+      // Name match (highest priority)
+      if (lcName.includes(q)) {
+        hits.push({ kind: "entity", id, name, type, matchField: "name", snippet: name });
+        continue;
+      }
+      // Body match
+      const idx = lcContent.indexOf(q);
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 60);
+        const end = Math.min(content.length, idx + q.length + 100);
+        let snippet = content.slice(start, end).replace(/\n+/g, " ").replace(/\s+/g, " ");
+        if (start > 0) snippet = "…" + snippet;
+        if (end < content.length) snippet = snippet + "…";
+        hits.push({ kind: "entity", id, name, type, matchField: "body", snippet });
+      }
+    }
+  }
+
+  // Search sources
+  const sourcesDir = join(WIKI_DIR, "sources");
+  if (existsSync(sourcesDir)) {
+    let files: string[] = [];
+    try { files = readdirSync(sourcesDir).filter((f) => f.endsWith(".md")); } catch { files = []; }
+    for (const file of files) {
+      const path = join(sourcesDir, file);
+      let content = "";
+      try { content = readFileSync(path, "utf-8"); } catch { continue; }
+      const fm = parseWikiFrontmatter(content);
+      const title = (fm.title as string) || file;
+      const lcTitle = title.toLowerCase();
+      const lcContent = content.toLowerCase();
+
+      if (lcTitle.includes(q)) {
+        hits.push({ kind: "source", id: file, name: title, type: "source", matchField: "name", snippet: title });
+        continue;
+      }
+      const idx = lcContent.indexOf(q);
+      if (idx >= 0) {
+        const start = Math.max(0, idx - 60);
+        const end = Math.min(content.length, idx + q.length + 100);
+        let snippet = content.slice(start, end).replace(/\n+/g, " ").replace(/\s+/g, " ");
+        if (start > 0) snippet = "…" + snippet;
+        if (end < content.length) snippet = snippet + "…";
+        hits.push({ kind: "source", id: file, name: title, type: "source", matchField: "body", snippet });
+      }
+    }
+  }
+
+  // Sort: name matches first, then by kind (entities before sources)
+  hits.sort((a, b) => {
+    if (a.matchField === "name" && b.matchField !== "name") return -1;
+    if (b.matchField === "name" && a.matchField !== "name") return 1;
+    if (a.kind !== b.kind) return a.kind === "entity" ? -1 : 1;
+    return 0;
+  });
+
+  return { query, total: hits.length, hits: hits.slice(0, 30) };
+}
+
 // ─── Phase 2: Intelligence APIs ─────────────────────────────────────────────
 
 function getRatings() {
@@ -1131,7 +1720,7 @@ function getStaleness() {
 }
 
 function getTimeSavings() {
-  const INCEPTION = new Date("2026-02-11");
+  const INCEPTION = new Date(); // Set your PAI start date
   const daysSince = Math.floor((Date.now() - INCEPTION.getTime()) / 86400000);
 
   // Estimated daily savings per automation (conservative ranges)
@@ -1214,12 +1803,12 @@ function getMaturityAssessment() {
 
   // Six capability dimensions scored 0-100 — updated 9 Apr 2026
   const dimensions = [
-    { name: "Context", score: 88, detail: "Goals, projects, stakeholders, health, finance" },
-    { name: "Personality", score: 82, detail: "DA identity, voice, personality, SkillForge methodology" },
-    { name: "Tool Use", score: 92, detail: "Skills, hooks, dashboards, MCP integrations, CLI tools" },
-    { name: "Awareness", score: 75, detail: "Monitor daemon, health sync, calendar sync, recursive skill improvement" },
-    { name: "Proactivity", score: 72, detail: "Proactive alerts, what-if engine, budget pace warnings, SkillDoctor auto-proposals" },
-    { name: "Multitask Scale", score: 65, detail: "Up to 8 parallel agents, background tasks, agent teams" },
+    { name: "Context", score: 88, detail: "Goals, projects, stakeholders, health, finance, DNA, leadership, 185 skill-index, 78 memory files" },
+    { name: "Personality", score: 82, detail: "Sage identity, voice, intro story, coaching frameworks, SkillForge methodology" },
+    { name: "Tool Use", score: 92, detail: "185 skills, 43 hooks, 7 dashboards, MCP integrations, CLI tools, Sage AI chat with function calling" },
+    { name: "Awareness", score: 75, detail: "HealthSync, CalendarSync, finance proactive alerts, debt trajectory tracking, recursive skill improvement" },
+    { name: "Proactivity", score: 72, detail: "Sage proactive alerts, finance what-if engine, budget pace warnings, SkillDoctor auto-proposals" },
+    { name: "Multitask Scale", score: 65, detail: "Up to 8 parallel agents, background tasks, agent teams, Groot VPS bridge" },
   ];
 
   const paimScore = 79.0; // Updated 9 Apr 2026 — post Sprint 1/2/3
@@ -1782,14 +2371,14 @@ function getSessionIntent(db: Database): {
     "Finance": ["finance", "debt", "spending", "budget", "transaction", "sunday money", "dashboard", "rent", "savings rate"],
     "Control Tower": ["control tower", "control-tower", "command center"],
     "Sage Capture": ["sage capture", "telegram", "sage inbox", "capture app"],
-    // Add your own projects: "Project Name": ["keyword1", "keyword2"],
+    "Pharma Link": ["pharma", "wms", "warehouse", "vanya"],
     "AI Art": ["ai art", "post-photographic", "firefly", "no crew", "bag man", "character"],
     "Groot": ["groot", "vps", "hostinger", "openclaw"],
     "PAI Core": ["algorithm", "pai", "skill", "hook", "steering", "skillforge", "skilldoctor", "token diet", "paimm", "capability"],
     "Health": ["health", "whoop", "garmin", "recovery", "hrv"],
     "Email": ["email", "newsletter", "inbox", "briefing", "morning"],
     "Coaching": ["coaching", "multiplier", "diminisher", "wiseman", "goal editor"],
-    // "Work": ["work", "meeting", "stakeholder"],
+    "Work": ["work", "stakeholder", "meeting prep"],
   };
 
   const projects: { name: string; sessions: number; lastActive: string; daysAgo: number }[] = [];
@@ -2051,6 +2640,36 @@ async function main() {
 
       if (url.pathname === "/api/maturity") {
         return new Response(JSON.stringify(getMaturityAssessment()), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.pathname === "/api/wiki") {
+        return new Response(JSON.stringify(getWikiData()), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // /api/wiki/entity?id=tools/claude-code
+      if (url.pathname === "/api/wiki/entity") {
+        const id = url.searchParams.get("id") || "";
+        return new Response(JSON.stringify(getWikiEntity(id)), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // /api/wiki/source?filename=20260418-allie-claudpedia.md
+      if (url.pathname === "/api/wiki/source") {
+        const filename = url.searchParams.get("filename") || "";
+        return new Response(JSON.stringify(getWikiSource(filename)), {
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // /api/wiki/search?q=karpathy
+      if (url.pathname === "/api/wiki/search") {
+        const q = url.searchParams.get("q") || "";
+        return new Response(JSON.stringify(searchWiki(q)), {
           headers: { "Content-Type": "application/json" },
         });
       }

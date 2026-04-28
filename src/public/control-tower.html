@@ -341,6 +341,10 @@
     .team-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
+  .wiki-lens-row:hover { background: rgba(100, 160, 255, 0.08); }
+  .wiki-source-row:hover { background: rgba(100, 160, 255, 0.05); }
+  .wiki-search-hit:hover { background: rgba(100, 160, 255, 0.08); }
+
   /* ─── METRICS GRID ─── */
   .section-title {
     font-size: 11px;
@@ -1460,7 +1464,7 @@
       <div class="header-icon">🗼</div>
       <div>
         <div class="header-title">PAI Control Tower</div>
-        <div class="header-subtitle">Your Name + Your DA &nbsp;|&nbsp; <span id="paiVersion">PAI v4.0.3</span> &nbsp;|&nbsp; Algorithm <span id="algoVersion">v3.7.0</span></div>
+        <div class="header-subtitle">Ruby Wolff + Sage &nbsp;|&nbsp; <span id="paiVersion">PAI v4.0.3</span> &nbsp;|&nbsp; Algorithm <span id="algoVersion">v3.7.0</span></div>
       </div>
     </div>
     <div class="header-right">
@@ -1496,7 +1500,7 @@
       </div>
       <div class="status-item">
         <div class="status-dot" id="grootDot"></div>
-        <span id="grootLabel">Remote Node</span>
+        <span id="grootLabel">Groot VPS</span>
       </div>
     </div>
     <div class="last-synced" id="lastSynced">Syncing...</div>
@@ -1761,6 +1765,54 @@
     <div class="health-grid" id="healthGrid"></div>
   </div>
 
+  <!-- PHASE 5: PERSONAL WIKI -->
+  <div class="section-title">Personal Wiki <span id="wikiFilterBadge" style="font-size: 10px; opacity: 0.7; margin-left: 8px; display: none;"></span></div>
+
+  <!-- Search bar -->
+  <div style="margin-bottom: 16px; position: relative;">
+    <input type="text" id="wikiSearch" placeholder="Search entities + sources (min 2 chars)..." style="width: 100%; padding: 10px 14px; background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 10px; color: var(--text); font-size: 0.9rem; outline: none; font-family: inherit;">
+    <div id="wikiSearchResults" style="position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; background: rgba(10, 14, 23, 0.97); backdrop-filter: blur(12px); border: 1px solid rgba(100, 160, 255, 0.18); border-radius: 10px; max-height: 360px; overflow-y: auto; display: none; z-index: 200; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);"></div>
+  </div>
+
+  <div class="chart-row">
+    <div class="chart-panel">
+      <div class="chart-title">Vault Overview</div>
+      <div class="inventory-grid" style="grid-template-columns: repeat(6, 1fr); gap: 10px;">
+        <div class="inv-card wiki-count-card" data-filter="areas" style="cursor: pointer;"><div class="inv-icon">🗂️</div><div class="inv-count" id="wikiAreas">—</div><div class="inv-label">Areas</div></div>
+        <div class="inv-card wiki-count-card" data-filter="projects" style="cursor: pointer;"><div class="inv-icon">📦</div><div class="inv-count" id="wikiProjects">—</div><div class="inv-label">Projects</div></div>
+        <div class="inv-card wiki-count-card" data-filter="people" style="cursor: pointer;"><div class="inv-icon">👤</div><div class="inv-count" id="wikiPeople">—</div><div class="inv-label">People</div></div>
+        <div class="inv-card wiki-count-card" data-filter="tools" style="cursor: pointer;"><div class="inv-icon">🛠️</div><div class="inv-count" id="wikiTools">—</div><div class="inv-label">Tools</div></div>
+        <div class="inv-card wiki-count-card" data-filter="concepts" style="cursor: pointer;"><div class="inv-icon">💡</div><div class="inv-count" id="wikiConcepts">—</div><div class="inv-label">Concepts</div></div>
+        <div class="inv-card"><div class="inv-icon">📚</div><div class="inv-count" id="wikiSources">—</div><div class="inv-label">Sources</div></div>
+      </div>
+      <div class="stat-pills" id="wikiPills" style="margin-top: 16px;"></div>
+      <div class="chart-title" style="margin-top: 20px; font-size: 0.85rem; opacity: 0.7;">Recent Sources</div>
+      <div id="wikiRecent" style="margin-top: 8px; font-size: 0.85rem;">—</div>
+    </div>
+    <div class="chart-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div class="chart-title" style="margin: 0;">Compiled Lenses</div>
+        <button id="wikiGraphToggle" style="background: rgba(100, 160, 255, 0.08); border: 1px solid rgba(100, 160, 255, 0.2); color: var(--text); padding: 4px 10px; border-radius: 12px; font-size: 0.7rem; cursor: pointer;">Show graph</button>
+      </div>
+      <div id="wikiLensMost" style="margin-bottom: 16px;"></div>
+      <div id="wikiLensOrphans" style="margin-bottom: 16px;"></div>
+      <div id="wikiLensRecent"></div>
+      <div id="wikiGraphContainer" style="display: none; margin-top: 16px;">
+        <div id="wikiGraphLegend" style="display: flex; gap: 12px; margin-bottom: 8px; font-size: 0.75rem;"></div>
+        <svg class="chart-svg" id="wikiGraph" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet" style="min-height: 400px;"></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wiki detail side panel (fixed, slides in from right) -->
+  <div id="wikiPanel" style="position: fixed; top: 0; right: 0; width: 480px; max-width: 95vw; height: 100vh; background: rgba(10, 14, 23, 0.98); backdrop-filter: blur(20px); border-left: 1px solid rgba(100, 160, 255, 0.2); box-shadow: -8px 0 40px rgba(0, 0, 0, 0.6); transform: translateX(100%); transition: transform 0.25s ease-out; z-index: 9999; overflow-y: auto; padding: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+      <div id="wikiPanelTitle" style="font-size: 1.1rem; font-weight: 500; color: var(--text-bright); flex: 1;"></div>
+      <button id="wikiPanelClose" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 14px; line-height: 1;">✕</button>
+    </div>
+    <div id="wikiPanelBody" style="font-size: 0.88rem; line-height: 1.55;"></div>
+  </div>
+
   <!-- FOOTER -->
   <div class="footer">
     PAI Control Tower &nbsp;·&nbsp; All Phases &nbsp;·&nbsp; Refresh <span id="refreshCounter">60</span>s
@@ -1853,7 +1905,7 @@
       $('ollamaDot').className = 'status-dot ' + (status.ollama ? 'up' : 'down');
       $('telegramDot').className = 'status-dot ' + (status.telegramBot ? 'up' : 'down');
       $('grootDot').className = 'status-dot ' + (status.groot ? 'up' : 'down');
-      $('grootLabel').textContent = status.groot ? ('Remote Node' + (status.grootUptime ? ' · ' + status.grootUptime : '')) : 'Remote Node';
+      $('grootLabel').textContent = status.groot ? ('Groot VPS' + (status.grootUptime ? ' · ' + status.grootUptime : '')) : 'Groot VPS';
       $('lastSynced').textContent = 'Last synced: ' + timeAgo(metrics.lastSync);
 
       // Core metrics
@@ -3111,11 +3163,501 @@
     }
   }
 
+  // Wiki colors by entity type (matching inventory icons)
+  const WIKI_TYPE_COLORS = {
+    areas: '#94a3b8',      // muted slate — PARA layer
+    people: '#60a5fa',     // accent-bright blue
+    tools: '#f59e0b',      // accent-warm amber
+    concepts: '#22c55e',   // accent-green
+    projects: '#a78bfa',   // purple
+  };
+
+  function renderWiki(data) {
+    if (!data) return;
+    const c = data.counts || {};
+    const set = (id, v) => { const el = $(id); if (el) el.textContent = (v ?? 0).toLocaleString(); };
+    set('wikiAreas', c.areas);
+    set('wikiPeople', c.people);
+    set('wikiTools', c.tools);
+    set('wikiConcepts', c.concepts);
+    set('wikiProjects', c.projects);
+    set('wikiSources', c.sources);
+
+    // Pills — watch list + refresh queue status
+    const pills = $('wikiPills');
+    if (pills) {
+      const watchPill = `<span class="pill">👁 ${data.watchCount || 0} watched</span>`;
+      const queuePill = data.refreshQueue > 0
+        ? `<span class="pill" style="background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3);">⟳ ${data.refreshQueue} due for refresh</span>`
+        : `<span class="pill">⟳ 0 in queue</span>`;
+      pills.innerHTML = watchPill + queuePill;
+    }
+
+    // Recent sources (clickable rows)
+    const recent = $('wikiRecent');
+    if (recent) {
+      if (!data.recentSources || data.recentSources.length === 0) {
+        recent.innerHTML = '<div style="opacity: 0.5; font-style: italic;">No sources ingested yet. Paste a URL with <code>/wiki</code> to start.</div>';
+      } else {
+        recent.innerHTML = data.recentSources.slice(0, 5).map(s =>
+          `<div class="wiki-source-row" data-wiki-source="${escHtml(s.filename)}" style="padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;">
+            <span style="opacity: 0.6; margin-right: 8px;">${escHtml(s.date)}</span>
+            <span>${escHtml(s.title)}</span>
+          </div>`
+        ).join('');
+      }
+    }
+
+    // Legend
+    const legend = $('wikiGraphLegend');
+    if (legend) {
+      legend.innerHTML = Object.entries(WIKI_TYPE_COLORS).map(([type, color]) =>
+        `<span style="display: flex; align-items: center; gap: 4px;">
+          <span style="width: 10px; height: 10px; background: ${color}; border-radius: 50%;"></span>
+          ${type}
+        </span>`
+      ).join('');
+    }
+
+    // ─── Compiled lenses (default view — replaces graph-as-primary) ───
+    const renderLensRow = (entry, extra) => {
+      const color = WIKI_TYPE_COLORS[entry.type] || '#888';
+      return `<div class="wiki-lens-row" data-wiki-entity="${escHtml(entry.id)}" style="display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">
+        <span style="width: 8px; height: 8px; background: ${color}; border-radius: 50%; flex-shrink: 0;"></span>
+        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escHtml(entry.name)}</span>
+        <span style="opacity: 0.5; font-size: 0.75rem;">${extra}</span>
+      </div>`;
+    };
+
+    const renderLensPanel = (containerId, title, icon, entries, extraFn, emptyMsg) => {
+      const el = $(containerId);
+      if (!el) return;
+      const header = `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">${icon} ${title} <span style="opacity: 0.5;">(${entries.length})</span></div>`;
+      if (entries.length === 0) {
+        el.innerHTML = header + `<div style="opacity: 0.4; font-style: italic; font-size: 0.8rem; padding-left: 14px;">${emptyMsg}</div>`;
+        return;
+      }
+      el.innerHTML = header + entries.map(e => renderLensRow(e, extraFn(e))).join('');
+    };
+
+    const lenses = data.lenses || { mostConnected: [], orphans: [], recentlyTouched: [] };
+
+    renderLensPanel(
+      'wikiLensMost',
+      'Most Connected',
+      '🔗',
+      lenses.mostConnected,
+      (e) => `${e.degree || 0} link${e.degree === 1 ? '' : 's'}`,
+      'No connected entities yet.'
+    );
+
+    renderLensPanel(
+      'wikiLensOrphans',
+      'Orphans',
+      '🏝️',
+      lenses.orphans,
+      () => 'no refs',
+      'No orphan entities — everything is connected.'
+    );
+
+    renderLensPanel(
+      'wikiLensRecent',
+      'Recently Touched',
+      '🕐',
+      lenses.recentlyTouched,
+      (e) => e.last_seen || '',
+      'No entities with last_seen dates.'
+    );
+
+    // Graph viz — force-ish layout on a grid (honors filter) — only if toggle is on
+    const svg = $('wikiGraph');
+    const graphContainer = $('wikiGraphContainer');
+    if (!svg || !graphContainer || graphContainer.style.display === 'none') return;
+    const allEntities = data.entities || [];
+    const entities = wikiFilterType ? allEntities.filter(e => e.type === wikiFilterType) : allEntities;
+    const edges = (data.edges || []).filter(ed => {
+      if (!wikiFilterType) return true;
+      const fromOk = entities.some(e => e.id === ed.from);
+      const toOk = entities.some(e => e.id === ed.to);
+      return fromOk && toOk;
+    });
+
+    if (entities.length === 0) {
+      const msg = wikiFilterType
+        ? `No ${wikiFilterType} entities yet — click filter again to clear`
+        : 'Vault empty — ingest a source to populate the graph';
+      svg.innerHTML = `<text x="300" y="200" text-anchor="middle" fill="#64748b" font-size="14" font-style="italic">${msg}</text>`;
+      return;
+    }
+
+    // Position entities: concentric circles per type to avoid full force sim
+    const W = 600, H = 400;
+    const cx = W / 2, cy = H / 2;
+    const typeRadii = { areas: 40, people: 90, projects: 140, tools: 180, concepts: 220 };
+    const typeGroups = { areas: [], people: [], projects: [], tools: [], concepts: [] };
+    entities.forEach(e => { if (typeGroups[e.type]) typeGroups[e.type].push(e); });
+
+    const positions = {};
+    Object.entries(typeGroups).forEach(([type, list]) => {
+      const r = typeRadii[type];
+      const n = list.length || 1;
+      list.forEach((e, i) => {
+        const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+        positions[e.id] = {
+          x: cx + r * Math.cos(angle),
+          y: cy + r * Math.sin(angle),
+          entity: e,
+        };
+      });
+    });
+
+    // Build SVG
+    let svgContent = '';
+    // Edges first (drawn behind nodes)
+    edges.forEach(e => {
+      const from = positions[e.from];
+      const to = positions[e.to];
+      if (!from || !to) return;
+      svgContent += `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" stroke="rgba(100, 160, 255, 0.25)" stroke-width="1"/>`;
+    });
+    // Nodes (clickable via data-wiki-entity + cursor pointer)
+    Object.values(positions).forEach(({ x, y, entity }) => {
+      const color = WIKI_TYPE_COLORS[entity.type] || '#888';
+      const radius = entity.watch ? 7 : 5;
+      const eid = escHtml(entity.id);
+      svgContent += `<circle cx="${x}" cy="${y}" r="${radius}" fill="${color}" opacity="0.85" data-wiki-entity="${eid}" style="cursor: pointer;">
+        <title>${escHtml(entity.name)} (${entity.type}${entity.watch ? ' · watched' : ''}) — click to drill in</title>
+      </circle>`;
+      const label = entity.name.length > 18 ? entity.name.slice(0, 16) + '…' : entity.name;
+      svgContent += `<text x="${x}" y="${y - radius - 4}" text-anchor="middle" fill="#e2e8f0" font-size="9" opacity="0.8" data-wiki-entity="${eid}" style="cursor: pointer; pointer-events: all;">${escHtml(label)}</text>`;
+    });
+
+    svg.innerHTML = svgContent;
+  }
+
+  async function fetchWiki() {
+    try {
+      const res = await authFetch('/api/wiki');
+      const data = await res.json();
+      cachedWikiData = data;
+      renderWiki(data);
+    } catch (err) {
+      console.error('Wiki fetch error:', err);
+    }
+  }
+
+  // ─── Wiki Interactivity (side panel + filters) ───
+
+  let cachedWikiData = null;
+  let wikiFilterType = null;  // null = show all, or 'people'/'tools'/'concepts'/'projects'
+
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function openWikiPanel(titleHtml, bodyHtml) {
+    const panel = $('wikiPanel');
+    const title = $('wikiPanelTitle');
+    const body = $('wikiPanelBody');
+    if (!panel || !title || !body) return;
+    title.innerHTML = titleHtml;
+    body.innerHTML = bodyHtml;
+    panel.style.transform = 'translateX(0)';
+  }
+
+  function closeWikiPanel() {
+    const panel = $('wikiPanel');
+    if (panel) panel.style.transform = 'translateX(100%)';
+  }
+
+  async function showEntityDetail(entityId) {
+    openWikiPanel('<span style="opacity: 0.6;">Loading...</span>', '');
+    try {
+      const res = await authFetch(`/api/wiki/entity?id=${encodeURIComponent(entityId)}`);
+      const data = await res.json();
+      if (!data.found) {
+        openWikiPanel(`Entity not found`, `<div style="opacity: 0.6;">No entity at <code>${escHtml(entityId)}</code></div>`);
+        return;
+      }
+      const typeColor = WIKI_TYPE_COLORS[data.type] || '#888';
+      const watch = data.frontmatter && data.frontmatter.watch ? '<span class="pill" style="margin-left: 8px;">👁 watched</span>' : '';
+      const titleHtml = `<span style="display: inline-block; width: 10px; height: 10px; background: ${typeColor}; border-radius: 50%; margin-right: 8px; vertical-align: middle;"></span>${escHtml(data.name)} <span style="opacity: 0.5; font-size: 0.75rem; margin-left: 6px;">${data.type}</span>${watch}`;
+
+      let body = '';
+      if (data.summary) {
+        body += `<div style="padding: 12px; background: rgba(59, 130, 246, 0.08); border-left: 2px solid rgba(59, 130, 246, 0.4); border-radius: 4px; margin-bottom: 16px;">${escHtml(data.summary)}</div>`;
+      }
+
+      if (data.claimsBySource && data.claimsBySource.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 8px;">Claims by Source</div>`;
+        for (const grp of data.claimsBySource) {
+          body += `<div style="margin-bottom: 14px;"><div style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 4px; font-style: italic;">— ${escHtml(grp.source)}</div>`;
+          body += `<ul style="margin: 0 0 0 16px; padding: 0;">`;
+          for (const claim of grp.claims) body += `<li style="margin-bottom: 4px;">${escHtml(claim)}</li>`;
+          body += `</ul></div>`;
+        }
+      }
+
+      if (data.contradictions && data.contradictions.trim()) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--accent-warm); margin: 16px 0 8px;">Contradictions</div>`;
+        body += `<div style="padding: 10px; background: rgba(245, 158, 11, 0.08); border-left: 2px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: 0.85rem; white-space: pre-wrap;">${escHtml(data.contradictions)}</div>`;
+      }
+
+      if (data.related && data.related.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin: 16px 0 8px;">Related</div>`;
+        body += `<div style="display: flex; flex-wrap: wrap; gap: 6px;">`;
+        for (const rel of data.related) {
+          const relColor = WIKI_TYPE_COLORS[rel.type] || '#888';
+          if (rel.exists) {
+            body += `<a href="#" data-wiki-entity="${escHtml(rel.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(100, 160, 255, 0.08); border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 16px; color: var(--text); text-decoration: none; font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: ${relColor}; border-radius: 50%;"></span>${escHtml(rel.name)}</a>`;
+          } else {
+            body += `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.1); border-radius: 16px; color: var(--text-muted); font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: ${relColor}; border-radius: 50%; opacity: 0.4;"></span>${escHtml(rel.name)} <span style="opacity: 0.5;">(not yet)</span></span>`;
+          }
+        }
+        body += `</div>`;
+      }
+
+      // ─── Reverse-lookup enrichments ───
+
+      if (data.areasContaining && data.areasContaining.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin: 16px 0 8px;">Appears in Areas</div>`;
+        body += `<div style="display: flex; flex-wrap: wrap; gap: 6px;">`;
+        for (const a of data.areasContaining) {
+          body += `<a href="#" data-wiki-entity="${escHtml(a.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(148, 163, 184, 0.12); border: 1px solid rgba(148, 163, 184, 0.25); border-radius: 16px; color: var(--text); text-decoration: none; font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: #94a3b8; border-radius: 50%;"></span>${escHtml(a.name)}</a>`;
+        }
+        body += `</div>`;
+      }
+
+      if (data.conceptsOriginated && data.conceptsOriginated.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin: 16px 0 8px;">Concepts Originated</div>`;
+        body += `<div style="display: flex; flex-wrap: wrap; gap: 6px;">`;
+        for (const c of data.conceptsOriginated) {
+          body += `<a href="#" data-wiki-entity="${escHtml(c.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 16px; color: var(--text); text-decoration: none; font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: #22c55e; border-radius: 50%;"></span>${escHtml(c.name)}</a>`;
+        }
+        body += `</div>`;
+      }
+
+      if (data.relatedFrom && data.relatedFrom.length > 0) {
+        // Dedup against forward `related` so we don't double-show the same entity
+        const forwardIds = new Set((data.related || []).map(r => r.id));
+        const inbound = data.relatedFrom.filter(r => !forwardIds.has(r.id));
+        if (inbound.length > 0) {
+          body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin: 16px 0 8px;">Referenced By <span style="opacity: 0.5;">(${inbound.length})</span></div>`;
+          body += `<div style="display: flex; flex-wrap: wrap; gap: 6px;">`;
+          for (const r of inbound) {
+            const rColor = WIKI_TYPE_COLORS[r.type] || '#888';
+            body += `<a href="#" data-wiki-entity="${escHtml(r.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(100, 160, 255, 0.06); border: 1px solid rgba(100, 160, 255, 0.12); border-radius: 16px; color: var(--text); text-decoration: none; font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: ${rColor}; border-radius: 50%;"></span>${escHtml(r.name)}</a>`;
+          }
+          body += `</div>`;
+        }
+      }
+
+      if (data.sourcesCiting && data.sourcesCiting.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin: 16px 0 8px;">Sources Citing This</div>`;
+        body += `<div style="font-size: 0.82rem;">`;
+        for (const s of data.sourcesCiting) {
+          body += `<div data-wiki-source="${escHtml(s.filename)}" style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); cursor: pointer;"><span style="opacity: 0.5; margin-right: 8px;">${escHtml(s.date)}</span>${escHtml(s.title)}</div>`;
+        }
+        body += `</div>`;
+      }
+
+      if (data.editorUrl) {
+        body += `<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06);"><a href="${escHtml(data.editorUrl)}" style="color: var(--accent-bright); font-size: 0.8rem; text-decoration: none;">→ Open in editor</a></div>`;
+      }
+
+      openWikiPanel(titleHtml, body);
+    } catch (err) {
+      openWikiPanel('Error', `<div style="color: var(--accent-red);">${escHtml(String(err))}</div>`);
+    }
+  }
+
+  async function showSourceDetail(filename) {
+    openWikiPanel('<span style="opacity: 0.6;">Loading...</span>', '');
+    try {
+      const res = await authFetch(`/api/wiki/source?filename=${encodeURIComponent(filename)}`);
+      const data = await res.json();
+      if (!data.found) {
+        openWikiPanel('Source not found', `<div style="opacity: 0.6;">No source at <code>${escHtml(filename)}</code></div>`);
+        return;
+      }
+      const titleHtml = `📚 ${escHtml(data.title)}`;
+      let body = '';
+      if (data.summary) body += `<div style="padding: 12px; background: rgba(59, 130, 246, 0.08); border-left: 2px solid rgba(59, 130, 246, 0.4); border-radius: 4px; margin-bottom: 16px;">${escHtml(data.summary)}</div>`;
+
+      if (data.keyTakeaways && data.keyTakeaways.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 8px;">Key Takeaways</div>`;
+        body += `<ul style="margin: 0 0 16px 16px; padding: 0;">`;
+        for (const t of data.keyTakeaways) body += `<li style="margin-bottom: 4px;">${escHtml(t)}</li>`;
+        body += `</ul>`;
+      }
+
+      if (data.entitiesTouched && data.entitiesTouched.length > 0) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; opacity: 0.6; margin-bottom: 8px;">Entities Touched</div>`;
+        body += `<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px;">`;
+        for (const e of data.entitiesTouched) {
+          const eColor = WIKI_TYPE_COLORS[e.type] || '#888';
+          if (e.exists) {
+            body += `<a href="#" data-wiki-entity="${escHtml(e.id)}" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(100, 160, 255, 0.08); border: 1px solid rgba(100, 160, 255, 0.15); border-radius: 16px; color: var(--text); text-decoration: none; font-size: 0.8rem;"><span style="width: 6px; height: 6px; background: ${eColor}; border-radius: 50%;"></span>${escHtml(e.name)}</a>`;
+          } else {
+            body += `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.1); border-radius: 16px; color: var(--text-muted); font-size: 0.8rem;">${escHtml(e.name)}</span>`;
+          }
+        }
+        body += `</div>`;
+      }
+
+      if (data.contradictionsFound && data.contradictionsFound.trim() && !/^none/i.test(data.contradictionsFound.trim())) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--accent-warm); margin: 8px 0;">Contradictions Found</div>`;
+        body += `<div style="padding: 10px; background: rgba(245, 158, 11, 0.08); border-left: 2px solid rgba(245, 158, 11, 0.4); border-radius: 4px; font-size: 0.85rem; white-space: pre-wrap; margin-bottom: 12px;">${escHtml(data.contradictionsFound)}</div>`;
+      }
+      if (data.alignmentsFound && data.alignmentsFound.trim() && !/^none/i.test(data.alignmentsFound.trim())) {
+        body += `<div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: var(--accent-green); margin: 8px 0;">Alignments Found</div>`;
+        body += `<div style="padding: 10px; background: rgba(34, 197, 94, 0.08); border-left: 2px solid rgba(34, 197, 94, 0.4); border-radius: 4px; font-size: 0.85rem; white-space: pre-wrap;">${escHtml(data.alignmentsFound)}</div>`;
+      }
+
+      if (data.editorUrl) {
+        body += `<div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06);"><a href="${escHtml(data.editorUrl)}" style="color: var(--accent-bright); font-size: 0.8rem; text-decoration: none;">→ Open in editor</a></div>`;
+      }
+
+      openWikiPanel(titleHtml, body);
+    } catch (err) {
+      openWikiPanel('Error', `<div style="color: var(--accent-red);">${escHtml(String(err))}</div>`);
+    }
+  }
+
+  function toggleWikiFilter(type) {
+    wikiFilterType = wikiFilterType === type ? null : type;
+    const badge = $('wikiFilterBadge');
+    if (badge) {
+      if (wikiFilterType) {
+        badge.style.display = 'inline';
+        badge.innerHTML = `filtered: <strong style="color: var(--accent-bright); text-transform: none; letter-spacing: 1px;">${wikiFilterType}</strong> <a href="#" id="wikiClearFilter" style="color: var(--accent-warm); margin-left: 6px;">clear</a>`;
+      } else {
+        badge.style.display = 'none';
+        badge.innerHTML = '';
+      }
+    }
+    // Highlight active card, dim others
+    document.querySelectorAll('.wiki-count-card').forEach(c => {
+      const cardType = c.getAttribute('data-filter');
+      if (wikiFilterType && cardType !== wikiFilterType) {
+        c.style.opacity = '0.35';
+      } else {
+        c.style.opacity = '1';
+      }
+    });
+    if (cachedWikiData) renderWiki(cachedWikiData);
+  }
+
+  // Wiki search
+  let wikiSearchTimer = null;
+  async function doWikiSearch(q) {
+    const box = $('wikiSearchResults');
+    if (!box) return;
+    if (!q || q.length < 2) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/wiki/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      if (!data.hits || data.hits.length === 0) {
+        box.innerHTML = `<div style="padding: 12px 16px; opacity: 0.6; font-size: 0.85rem;">No matches for "${escHtml(q)}"</div>`;
+        box.style.display = 'block';
+        return;
+      }
+      const html = data.hits.map(h => {
+        const dataAttr = h.kind === 'entity' ? `data-wiki-entity="${escHtml(h.id)}"` : `data-wiki-source="${escHtml(h.id)}"`;
+        const color = h.kind === 'entity' ? (WIKI_TYPE_COLORS[h.type] || '#888') : '#a78bfa';
+        const badge = h.kind === 'entity' ? h.type : 'source';
+        return `<div class="wiki-search-hit" ${dataAttr} style="padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.05); cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
+            <span style="width: 8px; height: 8px; background: ${color}; border-radius: 50%;"></span>
+            <strong style="font-size: 0.88rem;">${escHtml(h.name)}</strong>
+            <span style="font-size: 0.7rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px;">${badge}</span>
+          </div>
+          ${h.matchField === 'body' ? `<div style="font-size: 0.8rem; opacity: 0.7; margin-left: 16px;">${escHtml(h.snippet)}</div>` : ''}
+        </div>`;
+      }).join('');
+      const footer = data.total > 30 ? `<div style="padding: 8px 16px; opacity: 0.5; font-size: 0.75rem; text-align: center;">Showing 30 of ${data.total} matches</div>` : '';
+      box.innerHTML = html + footer;
+      box.style.display = 'block';
+    } catch (err) {
+      box.innerHTML = `<div style="padding: 12px 16px; color: var(--accent-red); font-size: 0.85rem;">Search error</div>`;
+      box.style.display = 'block';
+    }
+  }
+
+  // Wire up static click handlers once
+  (function wireWikiInteractivity() {
+    const searchInput = $('wikiSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(wikiSearchTimer);
+        const q = e.target.value;
+        wikiSearchTimer = setTimeout(() => doWikiSearch(q), 180);
+      });
+      searchInput.addEventListener('blur', () => {
+        // Slight delay so click-on-result fires before hide
+        setTimeout(() => {
+          const box = $('wikiSearchResults');
+          if (box) box.style.display = 'none';
+        }, 200);
+      });
+      searchInput.addEventListener('focus', (e) => {
+        if (e.target.value.length >= 2) doWikiSearch(e.target.value);
+      });
+    }
+    document.querySelectorAll('.wiki-count-card').forEach(card => {
+      card.addEventListener('click', (e) => {
+        const type = card.getAttribute('data-filter');
+        if (type) toggleWikiFilter(type);
+      });
+    });
+    const closeBtn = $('wikiPanelClose');
+    if (closeBtn) closeBtn.addEventListener('click', closeWikiPanel);
+    const graphToggle = $('wikiGraphToggle');
+    if (graphToggle) {
+      graphToggle.addEventListener('click', () => {
+        const container = $('wikiGraphContainer');
+        if (!container) return;
+        const isHidden = container.style.display === 'none';
+        container.style.display = isHidden ? 'block' : 'none';
+        graphToggle.textContent = isHidden ? 'Hide graph' : 'Show graph';
+        if (isHidden && cachedWikiData) renderWiki(cachedWikiData); // force graph render
+      });
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeWikiPanel();
+    });
+    // Delegated click for dynamically-rendered links (entity pills, graph nodes, source rows)
+    document.addEventListener('click', (e) => {
+      const entityLink = e.target.closest('[data-wiki-entity]');
+      if (entityLink) {
+        e.preventDefault();
+        showEntityDetail(entityLink.getAttribute('data-wiki-entity'));
+        return;
+      }
+      const sourceLink = e.target.closest('[data-wiki-source]');
+      if (sourceLink) {
+        e.preventDefault();
+        showSourceDetail(sourceLink.getAttribute('data-wiki-source'));
+        return;
+      }
+      if (e.target && e.target.id === 'wikiClearFilter') {
+        e.preventDefault();
+        if (wikiFilterType) toggleWikiFilter(wikiFilterType);
+      }
+    });
+  })();
+
   // Initial load
   fetchData().then(() => fetchPhase4()); // Phase 4 needs metrics cached
   fetchPhase2();
   fetchLive();
   fetchMachine();
+  fetchWiki();
 
   // Live operations: refresh every 10 seconds
   setInterval(fetchLive, 10000);
@@ -3130,6 +3672,7 @@
       countdown = 60;
       fetchData();
       fetchMachine();
+      fetchWiki();
     }
   }, 1000);
 })();
