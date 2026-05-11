@@ -993,13 +993,14 @@ function parseWikiFrontmatter(content: string): Record<string, unknown> {
 
 function getWikiData(): WikiData {
   const empty: WikiData = {
-    counts: { people: 0, tools: 0, concepts: 0, projects: 0, sources: 0 },
+    counts: { people: 0, tools: 0, concepts: 0, projects: 0, areas: 0, sources: 0 },
     watchCount: 0,
     lastRefreshed: null,
     recentSources: [],
     entities: [],
     edges: [],
     refreshQueue: 0,
+    lenses: { mostConnected: [], orphans: [], recentlyTouched: [] },
   };
   if (!existsSync(WIKI_DIR)) return empty;
 
@@ -1422,8 +1423,8 @@ function searchWiki(query: string): { query: string; total: number; hits: WikiSe
   if (!q || q.length < 2) return { query, total: 0, hits: [] };
   const hits: WikiSearchHit[] = [];
 
-  // Search entities across all four types
-  const ENTITY_TYPES = ["people", "tools", "concepts", "projects"];
+  // Search entities across all five types
+  const ENTITY_TYPES = ["people", "tools", "concepts", "projects", "areas"];
   for (const type of ENTITY_TYPES) {
     const dir = join(WIKI_DIR, "entities", type);
     if (!existsSync(dir)) continue;
