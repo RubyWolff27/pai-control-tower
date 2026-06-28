@@ -1,0 +1,25 @@
+{
+  "session_date": "2026-06-29",
+  "gym_name": "Academy Jiu Jitsu",
+  "location": "Melbourne",
+  "class_time": "06:30",
+  "class_type": "gi",
+  "duration_mins": 60,
+  "instructor_name": "DC",
+  "raw_transcript": "Start of a new month, beginning the guard-pulling unit with coach DC.\nCovered three guard-pull/takedown entries plus sweep chains from the leg\ngrab and a triangle setup off the biceps/bar step. One roll during open mat.\n\nTechniques:\n- Arm drag to single leg (come around to back, grab leg)\n- Seated guard pull with scissor feet, pull back from there\n- De La Riva pull keeping the sleeve grip (not grabbing the leg)\n- Outside-leg sweep off the leg grab (forward/back drag, over to shoulder)\n- On their stand, re-drag down; on the second stand, swivel to opposite side\n- Biceps/bar step entry: foot off hip onto biceps, other foot into hip, drag down, slide up and bite the shoulder to set up the triangle\n\nRolls:\n- One open-mat roll",
+  "structured": {
+    "summary": "Start of a new month, beginning the guard-pulling unit with coach DC. Covered three guard-pull/takedown entries plus sweep chains from the leg grab and a triangle setup off the biceps/bar step. One roll during open mat.",
+    "focus_areas": ["guard pulling", "sweeps", "triangle setup"],
+    "class_tags": ["guard-pull", "technique", "drilling", "open-mat"],
+    "roll_count": 1,
+    "techniques": [
+      "Arm drag to single leg (come around to back, grab leg)",
+      "Seated guard pull with scissor feet, pull back from there",
+      "De La Riva pull keeping the sleeve grip (not grabbing the leg)",
+      "Outside-leg sweep off the leg grab (forward/back drag, over to shoulder)",
+      "On their stand, re-drag down; on the second stand, swivel to opposite side",
+      "Biceps/bar step entry: foot off hip onto biceps, other foot into hip, drag down, slide up and bite the shoulder to set up the triangle"
+    ],
+    "rolls": [{ "notes": "One open-mat roll" }]
+  }
+}
